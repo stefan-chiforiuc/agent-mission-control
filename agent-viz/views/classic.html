@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Classic Radar</title>
+<meta name="mc-description" content="The original look: glowing circular nodes, travelling message dots, message stream and 60-second swimlanes.">
+<meta name="mc-order" content="2">
+<link rel="stylesheet" href="/core.css">
+<style>
+body{font-size:13px}
+.stats{display:flex;gap:18px;color:var(--dim);font-size:11px;letter-spacing:.08em}
+.stats b{color:var(--text);font-weight:600}
+main{flex:1;display:grid;grid-template-columns:1fr 380px;grid-template-rows:1fr 190px;min-height:0}
+.graphwrap{position:relative;grid-row:1;grid-column:1;min-height:0;
+  background:radial-gradient(circle at 1px 1px,color-mix(in srgb,var(--accent) 18%,transparent) 1px,transparent 0) 0 0/28px 28px,
+             radial-gradient(ellipse at 40% 50%,color-mix(in srgb,var(--accent) 7%,transparent),transparent 65%)}
+.graphwrap::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(transparent 0 2px,rgba(0,0,0,.18) 2px 3px)}
+canvas{display:block;width:100%;height:100%}
+.legend{position:absolute;left:14px;top:12px;font-size:11px;color:var(--dim);letter-spacing:.1em;pointer-events:none}
+.hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;color:var(--dim);pointer-events:none;transition:opacity .6s}
+.hint big{display:block;color:var(--accent);letter-spacing:.3em;margin-bottom:8px;text-shadow:0 0 14px var(--accent)}
+aside{grid-row:1/3;grid-column:2;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+aside h2{margin:0;padding:10px 14px;font-size:11px;letter-spacing:.2em;color:var(--dim);border-bottom:1px solid var(--line);font-weight:500;display:flex;justify-content:space-between}
+#filter{color:var(--accent);cursor:pointer}
+#feed{flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.msg{border:1px solid var(--line);border-left:3px solid var(--c,var(--accent));background:var(--panel2);border-radius:6px;padding:7px 9px;cursor:pointer;animation:in .35s ease-out;min-width:0}
+.msg:hover{border-color:var(--c)}
+@keyframes in{from{opacity:0;transform:translateX(14px)}}
+.msg .top{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--dim);margin-bottom:3px;flex-wrap:wrap}
+.chip{padding:0 6px;border-radius:9px;color:#05070d;font-weight:600;font-size:10.5px}
+.arrow{color:var(--dim)}
+.kind{margin-left:auto;letter-spacing:.1em;text-transform:uppercase;font-size:9.5px}
+.msg .body{color:var(--text);white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.msg.open .body{-webkit-line-clamp:unset;max-height:300px;overflow:auto;display:block}
+.msg.tool{padding:4px 9px;background:transparent;border-style:dashed}
+.msg.tool .body{color:var(--dim);-webkit-line-clamp:1}
+.msg.text{background:transparent}
+.timeline{grid-row:2;grid-column:1;border-top:1px solid var(--line);background:var(--panel);position:relative;min-height:0}
+.timeline .legend{top:6px;z-index:1}
+.timeline canvas{position:absolute;inset:0}
+</style>
+</head>
+<body>
+<header id="mc-header"></header>
+<main>
+  <div class="graphwrap" id="gw">
+    <canvas id="graph"></canvas>
+    <div class="legend">AGENT GRAPH · click a node to filter</div>
+    <div class="hint" id="hint"><big>AWAITING SIGNAL</big>Run Claude Code with the hooks installed,<br>press ▶ Demo, or replay a past session.</div>
+  </div>
+  <aside>
+    <h2><span>MESSAGE STREAM</span><span id="filter" hidden></span></h2>
+    <div id="feed"></div>
+  </aside>
+  <div class="timeline" id="tw"><canvas id="tl"></canvas><div class="legend" style="pointer-events:auto">TIMELINE ·
+    <select id="win" style="padding:0 4px;font-size:10.5px"><option value="60000" selected>last 60s</option><option value="300000">last 5 min</option><option value="1800000">last 30 min</option><option value="0">whole session</option></select></div></div>
+</main>
+<script src="/core.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const { esc, alpha, nameMap, colorOf, effStatus, nowOf, isFresh, fmtD } = MC;
+const V = { nodes: new Map(), particles: [], rings: [], heat: new Map(), filter: null, feedSid: null, counts: { hand: 0, tools: 0 } };
+const gw = $('gw'), gc = $('graph'), g = gc.getContext('2d'), tw = $('tw'), tc = $('tl'), t2 = tc.getContext('2d'), feed = $('feed');
+const cur = () => MC.cur(), FF = () => getComputedStyle(document.body).fontFamily;
+
+/* ---------- nodes (circles) ---------- */
+function layout(snap) {
+  const W = gw.clientWidth, H = gw.clientHeight, set = (n, x, y) => { n.tx = x; n.ty = y; if (!n.init) { n.x = x; n.y = y; n.init = true; } };
+  if (V.nodes.has('user')) set(V.nodes.get('user'), W * .08, H * .5);
+  if (V.nodes.has('main')) set(V.nodes.get('main'), W * .3, H * .5);
+  const others = snap.agents.filter(a => a.id !== 'main').sort((a, b) => a.first - b.first), cols = others.length > 6 ? 2 : 1;
+  others.forEach((a, i) => { const n = V.nodes.get(a.id); if (!n) return;
+    const col = i % cols, rows = Math.ceil(others.length / cols), r = Math.floor(i / cols);
+    set(n, cols === 1 ? W * .7 : W * (.58 + col * .24), H * (.14 + (rows === 1 ? .36 : .72 * r / (rows - 1))) + (col ? 22 : 0)); });
+}
+function syncNodes(snap) {
+  const names = nameMap(snap), ids = new Set(snap.agents.map(a => a.id)); if (snap.agents.length) ids.add('user');
+  for (const id of [...V.nodes.keys()]) if (!ids.has(id)) V.nodes.delete(id);
+  for (const id of ids) if (!V.nodes.has(id)) V.nodes.set(id, { id, x: 0, y: 0, tx: 0, ty: 0, init: false, flash: 0, tool: '', toolT: 0, active: false, count: 0 });
+  for (const n of V.nodes.values()) {
+    const a = snap.agents.find(x => x.id === n.id); n.name = names.get(n.id) || n.id; n.color = colorOf(snap.id, n.id);
+    n.active = !!a && n.id !== 'user' && ['running', 'thinking', 'delegating'].includes(effStatus(a, snap)); n.count = a ? a.tools : 0;
+  }
+  layout(snap);
+  const sum = k => snap.agents.reduce((s, a) => s + a[k], 0);
+  $('mc-extra').innerHTML = `<span class="stats"><span>AGENTS <b>${snap.agents.length - (V.nodes.has('main') ? 1 : 0)}</b></span><span>HANDOFFS <b>${V.counts.hand}</b></span><span>TOOL CALLS <b>${sum('tools')}</b></span><span>ACTIVE <b>${[...V.nodes.values()].filter(n => n.active && n.id !== 'main').length}</b></span></span>`;
+}
+
+/* ---------- feed ---------- */
+const matches = (ev, f) => !f || [ev.agent, ev.from, ev.to].includes(f);
+function chipEl(snap, id) { const s = document.createElement('span'); s.className = 'chip'; s.dataset.id = id; s.style.background = colorOf(snap.id, id); s.textContent = nameMap(snap).get(id) || id; return s; }
+function addFeed(ev, snap) {
+  const el = document.createElement('div'), agent = ev.agent || ev.from, sp = (t, c) => Object.assign(document.createElement('span'), { textContent: t, className: c || '' });
+  el.className = 'msg ' + (ev.kind === 'tool' ? 'tool' : ev.kind === 'text' ? 'text' : ''); el.style.setProperty('--c', colorOf(ev.session, agent)); el._ev = ev;
+  const top = document.createElement('div'); top.className = 'top'; top.append(sp(new Date(ev.ts).toLocaleTimeString([], { hour12: false })));
+  if (['handoff', 'result', 'prompt'].includes(ev.kind)) top.append(chipEl(snap, ev.from), sp('→', 'arrow'), chipEl(snap, ev.to));
+  else top.append(chipEl(snap, agent), sp(ev.tool || 'says'));
+  if (ev.kind !== 'tool') top.append(sp(ev.kind === 'handoff' ? 'prompt' : ev.kind, 'kind'));
+  el.append(top, Object.assign(document.createElement('div'), { className: 'body', textContent: ev.text || '' }));
+  el.onclick = () => el.classList.toggle('open'); el.hidden = !matches(ev, V.filter);
+  const stick = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 40;
+  feed.append(el); while (feed.children.length > 3000) feed.firstChild.remove(); if (stick) feed.scrollTop = feed.scrollHeight;
+}
+function rebuildFeed() { feed.innerHTML = ''; const snap = cur(); if (!snap) return; for (const ev of (MC.S.events.get(snap.id) || []).slice(-3000)) addFeed(ev, snap); V.feedSid = snap.id; }
+function setFilter(f) {
+  V.filter = f; const fe = $('filter'); fe.hidden = !f; fe.textContent = f ? 'FILTER: ' + ((V.nodes.get(f) || {}).name || f) + ' ✕' : '';
+  feed.querySelectorAll('.msg').forEach(m => m.hidden = !matches(m._ev, f));
+}
+$('filter').onclick = () => setFilter(null);
+gc.addEventListener('click', e => { const r = gc.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  for (const n of V.nodes.values()) if (Math.hypot(n.x - x, n.y - y) < 32) return setFilter(V.filter === n.id ? null : n.id); setFilter(null); });
+
+/* ---------- graph canvas ---------- */
+function fit(c, wrap) { const r = devicePixelRatio || 1; c.width = wrap.clientWidth * r; c.height = wrap.clientHeight * r; c.getContext('2d').setTransform(r, 0, 0, r, 0, 0); }
+new ResizeObserver(() => { fit(gc, gw); fit(tc, tw); const s = cur(); if (s) layout(s); }).observe(gw);
+new ResizeObserver(() => fit(tc, tw)).observe(tw);
+
+function ctrl(f, t) { const mx = (f.x + t.x) / 2, my = (f.y + t.y) / 2, dx = t.x - f.x, dy = t.y - f.y, d = Math.hypot(dx, dy) || 1, off = Math.min(46, d * .16); return [mx - dy / d * off, my + dx / d * off]; }
+function bez(f, t, p) { const [cx, cy] = ctrl(f, t), q = 1 - p; return [q * q * f.x + 2 * q * p * cx + p * p * t.x, q * q * f.y + 2 * q * p * cy + p * p * t.y]; }
+
+function drawGraph(now) {
+  const W = gw.clientWidth, H = gw.clientHeight; g.clearRect(0, 0, W, H);
+  const snap = cur(); if (!snap) return; const ff = FF();
+  for (const n of V.nodes.values()) { n.x += (n.tx - n.x) * .12; n.y += (n.ty - n.y) * .12; n.flash *= .93; }
+  const pairs = []; if (V.nodes.has('main')) pairs.push(['user', 'main']); for (const a of snap.agents) if (a.parent && V.nodes.has(a.id) && V.nodes.has(a.parent)) pairs.push([a.parent, a.id]);
+  for (const [a, b] of pairs) {
+    const f = V.nodes.get(a), t = V.nodes.get(b); if (!f || !t) continue; const [cx, cy] = ctrl(f, t), heat = Math.max(0, 1 - (now - (V.heat.get(a + '|' + b) || 0)) / 6000);
+    g.beginPath(); g.moveTo(f.x, f.y); g.quadraticCurveTo(cx, cy, t.x, t.y); g.strokeStyle = alpha(t.color, .13 + heat * .5); g.lineWidth = 1 + heat * 1.6;
+    g.shadowColor = t.color; g.shadowBlur = heat * 12; g.stroke(); g.shadowBlur = 0;
+  }
+  V.particles = V.particles.filter(p => {
+    const f = V.nodes.get(p.from), t = V.nodes.get(p.to); if (!f || !t || p.sid !== snap.id) return false;
+    p.p += 0.012 + 0.004 * (1 - Math.min(1, p.p));
+    V.heat.set(pairs.some(q => q[0] === p.from && q[1] === p.to) ? p.from + '|' + p.to : p.to + '|' + p.from, now);
+    if (p.p >= 1) { t.flash = 1; V.rings.push({ n: t, r: 0, c: p.col }); return false; }
+    for (let i = 0; i < 9; i++) { const pp = p.p - i * .018; if (pp < 0) break; const [x, y] = bez(f, t, pp);
+      g.beginPath(); g.arc(x, y, p.kind === 'result' ? 3.4 - i * .25 : 3 - i * .22, 0, 7); g.fillStyle = alpha(p.col, 1 - i / 9); g.shadowColor = p.col; g.shadowBlur = 14; g.fill(); }
+    g.shadowBlur = 0;
+    if (p.label && p.p > .08 && p.p < .92) { const [x, y] = bez(f, t, p.p); g.font = '10.5px ' + ff; const w = g.measureText(p.label).width + 12;
+      g.fillStyle = 'rgba(4,6,12,.82)'; g.strokeStyle = alpha(p.col, .6); g.lineWidth = 1; g.beginPath(); g.roundRect(x + 8, y - 22, w, 17, 4); g.fill(); g.stroke();
+      g.fillStyle = p.col; g.fillText(p.label, x + 14, y - 10); }
+    return true;
+  });
+  V.rings = V.rings.filter(r => { r.r += 1.6; if (r.r > 46) return false; g.beginPath(); g.arc(r.n.x, r.n.y, 20 + r.r, 0, 7); g.strokeStyle = alpha(r.c, 1 - r.r / 46); g.lineWidth = 2; g.stroke(); return true; });
+  for (const n of V.nodes.values()) {
+    const R = n.id === 'main' ? 27 : n.id === 'user' ? 17 : 22, on = n.active, dim = V.filter && V.filter !== n.id ? .35 : 1; g.globalAlpha = dim;
+    if (on) { g.beginPath(); g.arc(n.x, n.y, R + 9, now / 400, now / 400 + 4.2); g.strokeStyle = alpha(n.color, .9); g.lineWidth = 2; g.shadowColor = n.color; g.shadowBlur = 16; g.stroke(); g.shadowBlur = 0; }
+    g.beginPath(); g.arc(n.x, n.y, R, 0, 7); const grd = g.createRadialGradient(n.x, n.y, 2, n.x, n.y, R);
+    grd.addColorStop(0, alpha(n.color, .35 + n.flash * .5)); grd.addColorStop(1, alpha(n.color, .08 + n.flash * .25));
+    g.fillStyle = grd; g.shadowColor = n.color; g.shadowBlur = 10 + n.flash * 28 + (on ? 8 : 0); g.fill(); g.lineWidth = 2; g.strokeStyle = n.color; g.stroke(); g.shadowBlur = 0;
+    g.fillStyle = n.color; g.textAlign = 'center'; g.font = '600 11px ' + ff; g.fillText(n.id === 'user' ? 'YOU' : n.name.toUpperCase().slice(0, 14), n.x, n.y + R + 17);
+    g.font = '700 11px ' + ff; g.fillText(n.id === 'user' ? '▲' : n.count, n.x, n.y + 4);
+    const age = now - n.toolT;
+    if (n.tool && age < 2600) { g.globalAlpha = dim * (1 - age / 2600); g.font = '10px ' + ff; g.fillStyle = '#cfe3ff'; g.fillText('⚙ ' + n.tool, n.x, n.y - R - 12 - age / 220); }
+    g.globalAlpha = 1;
+  }
+  g.textAlign = 'left';
+}
+
+/* ---------- timeline (swimlanes, last 60s) ---------- */
+function drawTimeline() {
+  const W = tw.clientWidth, H = tw.clientHeight; t2.clearRect(0, 0, W, H);
+  const snap = cur(); if (!snap) return; const names = nameMap(snap), tree = MC.buildTree(snap); if (!tree) return;
+  const order = []; const dfs = a => { order.push(a); for (const k of tree.kids.get(a.id) || []) dfs(k); }; dfs(tree.root);
+  const now = nowOf(snap), L = 96, top = 26, lane = Math.min(26, (H - top - 8) / order.length);
+  const win = Number($('win').value) || Math.max(60000, now - snap.first), x0 = now - win, X = t => L + (t - x0) / win * (W - L - 12);
+  t2.font = '10px ' + FF();
+  const step = win <= 90000 ? 10000 : win <= 600000 ? 60000 : win <= 3600000 ? 300000 : win <= 21600000 ? 1800000 : 7200000;
+  for (let s = Math.ceil(x0 / step) * step; s < now; s += step) { if (X(s) < L + 40) continue;
+    t2.strokeStyle = 'rgba(120,150,200,.12)'; t2.beginPath(); t2.moveTo(X(s), top - 4); t2.lineTo(X(s), H); t2.stroke();
+    t2.fillStyle = 'rgba(120,150,200,.5)'; t2.textAlign = 'center'; t2.fillText('-' + fmtD(now - s), X(s), top - 8); }
+  const evs = MC.S.events.get(snap.id) || [];
+  order.forEach((a, i) => {
+    const y = top + i * lane, c = colorOf(snap.id, a.id), st = effStatus(a, snap);
+    t2.fillStyle = i % 2 ? 'rgba(255,255,255,.015)' : 'transparent'; t2.fillRect(0, y, W, lane);
+    t2.fillStyle = c; t2.textAlign = 'left'; t2.fillText(names.get(a.id).slice(0, 13), 12, y + lane / 2 + 3);
+    const s0 = Math.max(L, X(a.first)), s1 = Math.min(W - 12, X(a.end || (st === 'idle' || st === 'done' ? a.last : now)));
+    if (s1 > L) { const live = !a.end && st !== 'idle' && st !== 'done';
+      t2.fillStyle = alpha(c, .28); t2.strokeStyle = alpha(c, .9); t2.shadowColor = c; t2.shadowBlur = live ? 10 : 0; t2.beginPath(); t2.roundRect(s0, y + 4, Math.max(3, s1 - s0), lane - 8, 3); t2.fill(); t2.stroke(); t2.shadowBlur = 0; }
+    if (s1 <= L) { t2.fillStyle = 'rgba(120,150,200,.65)'; t2.textAlign = 'left'; t2.fillText('◂ ended ' + fmtD(now - (a.end || a.last)) + ' ago', L + 8, y + lane / 2 + 3); }
+    t2.fillStyle = '#fff'; for (const ev of evs) if (ev.kind === 'tool' && ev.agent === a.id && ev.ts > x0 && ev.ts <= now) t2.fillRect(X(ev.ts) - 1, y + lane / 2 - 4, 2, 8);
+  });
+  t2.strokeStyle = 'rgba(255,255,255,.35)'; t2.beginPath(); t2.moveTo(W - 12, top - 4); t2.lineTo(W - 12, H); t2.stroke();
+}
+(function loop() { drawGraph(Date.now()); drawTimeline(); requestAnimationFrame(loop); })();
+
+/* ---------- wiring ---------- */
+function resetLocal() { V.nodes.clear(); V.particles = []; V.rings = []; V.heat.clear(); V.counts = { hand: 0, tools: 0 }; V.filter = null; $('filter').hidden = true; V.feedSid = null; }
+function render() {
+  const snap = cur(); $('hint').hidden = !!(snap && snap.agents.length);
+  if (!snap) { resetLocal(); feed.innerHTML = ''; $('mc-extra').innerHTML = ''; return; }
+  if (V.feedSid !== snap.id) { resetLocal(); V.counts.hand = (MC.S.events.get(snap.id) || []).filter(e => e.kind === 'handoff' || e.kind === 'result').length; rebuildFeed(); }
+  syncNodes(snap);
+}
+MC.start({
+  id: 'classic',
+  onSession() { resetLocal(); render(); },
+  onSnap() { render(); },
+  onTick() { render(); },
+  onReset() { resetLocal(); feed.innerHTML = ''; render(); },
+  onTheme() { render(); rebuildFeed(); },
+  onEvent(ev, snap) {
+    addFeed(ev, snap);
+    if (ev.kind === 'tool') { const n = V.nodes.get(ev.agent); if (n) { n.tool = ev.tool; n.toolT = Date.now(); } }
+    else if (['handoff', 'result', 'prompt'].includes(ev.kind)) {
+      if (ev.kind !== 'prompt') V.counts.hand++;
+      if (MC.isFresh(ev)) { V.particles.push({ sid: ev.session, from: ev.from, to: ev.to, kind: ev.kind, p: 0, label: (ev.text || '').replace(/\s+/g, ' ').slice(0, 34), col: colorOf(ev.session, ev.kind === 'result' ? ev.from : ev.to) });
+        if (V.particles.length > 40) V.particles.shift(); }
+    }
+  },
+});
+</script>
+</body>
+</html>

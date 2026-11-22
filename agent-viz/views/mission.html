@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mission Control</title>
+<meta name="mc-description" content="Grouped agent cards with sub-agent boxes, per-agent detail, tokens, model and live activity.">
+<meta name="mc-order" content="1">
+<link rel="stylesheet" href="/core.css">
+<style>
+main{flex:1;display:grid;grid-template-columns:1fr 430px;grid-template-rows:1fr 150px;min-height:0}
+.stage{position:relative;grid-row:1;grid-column:1;min-height:0;overflow:auto;
+  background:radial-gradient(circle at 1px 1px,color-mix(in srgb,var(--accent) 16%,transparent) 1px,transparent 0) 0 0/28px 28px,
+             radial-gradient(ellipse at 40% 40%,color-mix(in srgb,var(--accent) 7%,transparent),transparent 65%)}
+#world{position:relative;min-width:100%}
+#world canvas{position:absolute;left:0;top:0;pointer-events:none;z-index:2}
+.group{position:absolute;border:1px solid color-mix(in srgb,var(--c) 55%,transparent);border-radius:14px;z-index:1;
+  background:color-mix(in srgb,var(--c) 5%,transparent);box-shadow:inset 0 0 28px color-mix(in srgb,var(--c) 7%,transparent);transition:all .35s}
+.group .gl{position:absolute;left:12px;top:-9px;background:var(--bg);padding:0 7px;font-size:10px;letter-spacing:.12em;color:var(--c);white-space:nowrap}
+.group.root{border-width:1.5px}
+.card{position:absolute;z-index:3;width:224px;height:96px;border:1.5px solid color-mix(in srgb,var(--c) 70%,#000);border-radius:10px;padding:7px 9px;cursor:pointer;
+  background:linear-gradient(160deg,color-mix(in srgb,var(--c) 14%,var(--panel2)),var(--panel2));overflow:hidden;transition:left .35s,top .35s,box-shadow .3s,opacity .3s}
+.card:hover{border-color:var(--c)}
+.card.sel{outline:2px solid var(--c);outline-offset:2px}
+.card.flash{animation:flash .9s}
+@keyframes flash{0%{box-shadow:0 0 28px var(--c)}100%{box-shadow:none}}
+.card.running,.card.thinking,.card.delegating{box-shadow:0 0 18px color-mix(in srgb,var(--c) 45%,transparent)}
+.card.idle{opacity:.78}.card.done{opacity:.62}
+.card .r1{display:flex;align-items:center;gap:6px;font-weight:700;color:var(--c);white-space:nowrap}
+.card .r1 .nm{overflow:hidden;text-overflow:ellipsis;flex:1;letter-spacing:.04em}
+.card .r2{color:var(--dim);font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.card .r3{margin-top:4px;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);background:color-mix(in srgb,var(--c) 10%,transparent);border-radius:5px;padding:1px 6px}
+.card .r4{position:absolute;left:9px;right:9px;bottom:6px;display:flex;gap:8px;font-size:10.5px;color:var(--dim);white-space:nowrap}
+.card .r4 b{color:var(--text);font-weight:600}
+.sd{width:9px;height:9px;border-radius:50%;flex:none;background:var(--dim)}
+.sd.running{background:#3dff7a;box-shadow:0 0 9px #3dff7a;animation:blink 1s infinite}
+.sd.thinking{background:var(--c);box-shadow:0 0 9px var(--c);animation:blink .8s infinite}
+.sd.delegating{background:#ffb02e;box-shadow:0 0 9px #ffb02e;animation:blink 1.2s infinite}
+.sd.done{background:#3a7}
+.you{position:absolute;z-index:3;width:90px;height:30px;border:1.5px solid #e8f1ff;border-radius:15px;color:#e8f1ff;text-align:center;line-height:27px;font-weight:700;letter-spacing:.15em;
+  background:rgba(232,241,255,.08);box-shadow:0 0 14px rgba(232,241,255,.25)}
+.hint{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);text-align:center;color:var(--dim);pointer-events:none;transition:opacity .6s}
+.hint big{display:block;color:var(--accent);letter-spacing:.3em;margin-bottom:8px;text-shadow:0 0 14px var(--accent)}
+
+aside{grid-row:1/3;grid-column:2;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+aside h2{margin:0;padding:7px 12px;font-size:10.5px;letter-spacing:.2em;color:var(--dim);border-bottom:1px solid var(--line);border-top:1px solid var(--line);font-weight:500;display:flex;justify-content:space-between;flex:none}
+aside h2:first-child{border-top:0}
+#detail{flex:0 0 58%;overflow-y:auto;padding:10px 12px;min-height:0}
+#feedwrap{flex:1;display:flex;flex-direction:column;min-height:0}
+#filter{color:var(--accent);cursor:pointer}
+#feed{flex:1;overflow-y:auto;overflow-x:hidden;padding:7px 10px;display:flex;flex-direction:column;gap:5px}
+.d-head{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.d-head .nm{font-size:15px;font-weight:700;color:var(--c)}
+.d-sub{color:var(--dim);font-size:11px;margin-bottom:8px}
+.badge{font-size:10px;border:1px solid var(--line);border-radius:5px;padding:0 6px;color:var(--text)}
+.now{border:1px solid color-mix(in srgb,var(--c) 50%,transparent);background:color-mix(in srgb,var(--c) 9%,transparent);border-radius:8px;padding:8px 10px;margin-bottom:10px}
+.now .lbl{font-size:10px;letter-spacing:.18em;color:var(--dim)}
+.now .big{font-size:13.5px;color:var(--text);word-break:break-word;margin-top:2px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
+.kv{border:1px solid var(--line);border-radius:7px;padding:5px 8px;background:var(--panel2);min-width:0}
+.kv .k{font-size:9.5px;letter-spacing:.14em;color:var(--dim)}
+.kv .v{font-size:13px;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--panel2);margin:2px 0 4px;border:1px solid var(--line)}
+.bar i{display:block;height:100%}
+.legend2{display:flex;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--dim);margin-bottom:10px}
+.legend2 b{color:var(--text)}
+.sw{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}
+.sec{font-size:10px;letter-spacing:.18em;color:var(--dim);margin:10px 0 4px;display:flex;justify-content:space-between}
+.msgbox{border:1px solid var(--line);border-left:3px solid var(--c);border-radius:6px;background:var(--panel2);padding:9px 11px;white-space:pre-wrap;word-break:break-word;max-height:240px;overflow:auto;font-size:12.5px;line-height:1.55}
+.msgbox.task{max-height:130px;color:var(--dim)}
+.tl{font-size:11px;display:grid;grid-template-columns:auto 1fr auto;gap:2px 8px;color:var(--dim)}
+.tl .tn{color:var(--text)}.tl .te{color:#ff6b6b}
+.hist{display:flex;gap:5px;flex-wrap:wrap}
+.hist span{border:1px solid var(--line);border-radius:5px;padding:0 6px;font-size:10.5px;color:var(--dim)}
+.hist b{color:var(--text)}
+.kids{display:flex;gap:6px;flex-wrap:wrap}
+.kids button{padding:1px 8px;font-size:11px}
+.msg{border:1px solid var(--line);border-left:3px solid var(--c,var(--accent));background:var(--panel2);border-radius:6px;padding:6px 9px;cursor:pointer;animation:in .35s ease-out;min-width:0}
+.msg:hover{border-color:var(--c)}
+@keyframes in{from{opacity:0;transform:translateX(14px)}}
+.msg .top{display:flex;gap:6px;align-items:center;font-size:10.5px;color:var(--dim);margin-bottom:2px;flex-wrap:wrap}
+.chip{padding:0 6px;border-radius:9px;color:#05070d;font-weight:600;font-size:10.5px}
+.kind{margin-left:auto;letter-spacing:.1em;text-transform:uppercase;font-size:9.5px}
+.msg .body{white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.msg.open .body{-webkit-line-clamp:unset;max-height:300px;overflow:auto;display:block}
+.msg.tool{padding:3px 9px;background:transparent;border-style:dashed}
+.msg.tool .body{color:var(--dim);-webkit-line-clamp:1}
+.msg.text{background:transparent}
+.timeline{grid-row:2;grid-column:1;border-top:1px solid var(--line);background:var(--panel);position:relative;min-height:0}
+.timeline canvas{position:absolute;inset:0;width:100%;height:100%}
+.tlh{position:absolute;right:10px;top:4px;z-index:1;display:flex;gap:6px;align-items:center;font-size:10px;letter-spacing:.14em;color:var(--dim)}
+.tlh select{padding:0 4px;font-size:10.5px}
+.tab{padding:1px 9px;font-size:10px;letter-spacing:.12em;border-radius:5px;color:var(--dim)}
+.tab.on{color:var(--accent);border-color:var(--accent)}
+#tw.ro canvas,#tw.ro #win{display:none}
+#roster{position:absolute;left:0;right:0;top:28px;bottom:0;overflow:auto}
+#roster[hidden]{display:none}
+#roster table{width:100%;border-collapse:collapse;font-size:11.5px}
+#roster th{position:sticky;top:0;background:var(--panel);text-align:left;font-weight:500;font-size:9.5px;letter-spacing:.14em;color:var(--dim);padding:3px 8px;border-bottom:1px solid var(--line)}
+#roster td{padding:3px 8px;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent);white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+#roster tr.row{cursor:pointer}#roster tr.row:hover td{background:color-mix(in srgb,var(--c) 10%,transparent)}
+#roster tr.sel td{background:color-mix(in srgb,var(--c) 16%,transparent)}
+#roster .nm{color:var(--c);font-weight:700}
+#fctl{display:flex;gap:4px 10px;flex-wrap:wrap;align-items:center;padding:5px 10px;border-bottom:1px solid var(--line);font-size:10.5px;color:var(--dim);flex:none}
+#fctl label{display:flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap}
+#fctl input{accent-color:var(--accent);margin:0}
+#fctl select{padding:0 4px;font-size:10.5px;margin-left:auto}
+#fcount{color:var(--text);letter-spacing:0;margin-left:6px}
+@media(max-width:1000px){main{grid-template-columns:1fr 340px}}
+</style>
+</head>
+<body>
+<header id="mc-header"></header>
+<div id="strip"><span class="pill">no session yet</span></div>
+<main>
+  <div class="stage" id="stage">
+    <div id="world"><canvas id="graph"></canvas></div>
+    <div class="hint" id="hint"><big>AWAITING SIGNAL</big>Start Claude Code in a project with the hooks installed,<br>press ▶ Demo, or replay a past session.</div>
+  </div>
+  <aside>
+    <h2><span>AGENT DETAIL</span><span id="dsel" style="color:var(--dim)"></span></h2>
+    <div id="detail"></div>
+    <div id="feedwrap">
+      <h2><span>MESSAGE STREAM<span id="fcount"></span></span><span id="filter" hidden></span></h2>
+      <div id="fctl">
+        <label><input type="checkbox" data-k="prompt" checked>prompts</label><label><input type="checkbox" data-k="handoff" checked>tasks</label>
+        <label><input type="checkbox" data-k="result" checked>results</label><label><input type="checkbox" data-k="text" checked>says</label>
+        <label><input type="checkbox" data-k="tool" checked>tools</label>
+        <select id="flimit" title="How many messages to keep on screen"><option value="400">last 400</option><option value="2000" selected>last 2000</option><option value="0">show all</option></select>
+      </div>
+      <div id="feed"></div>
+    </div>
+  </aside>
+  <div class="timeline" id="tw">
+    <canvas id="tl"></canvas>
+    <div class="tlh"><button class="tab on" data-tab="tl">TIMELINE</button><button class="tab" data-tab="ro">ALL AGENTS <span id="rocount">0</span></button>
+      <select id="win"><option value="auto" selected>whole session (≤30m)</option><option value="60000">1 min</option><option value="300000">5 min</option><option value="1800000">30 min</option><option value="0">whole session</option></select></div>
+    <div id="roster" hidden></div>
+  </div>
+</main>
+<script src="/core.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const { esc, fmtK, fmtD, shortModel, mclass, alpha, TOOLICON, nameMap, colorOf, effStatus, buildTree, agentsOf, nowOf, isFresh } = MC;
+const V = { agent: 'main', filter: null, cards: new Map(), groups: new Map(), pos: new Map(), sig: '', particles: [], rings: [], heat: new Map(), notes: new Map(),
+            detailSig: '', feedSid: null, world: null, rootId: 'main' };
+const CW = 224, CH = 96, GP = 18, GAP = 20, HG = 36;
+const cur = () => MC.cur();
+// message-stream settings (which kinds to show, how many to keep) survive reloads
+let saved = {}; try { saved = JSON.parse(localStorage.getItem('mc-mission-feed')) || {}; } catch {}
+V.kinds = new Set(saved.kinds || ['prompt', 'handoff', 'result', 'text', 'tool']); V.limit = saved.limit != null ? saved.limit : 2000; V.rosterSig = '';
+const saveFeed = () => { try { localStorage.setItem('mc-mission-feed', JSON.stringify({ kinds: [...V.kinds], limit: V.limit })); } catch {} };
+
+/* ---------- tree layout (groups) ---------- */
+function measure(tree, a, maxW, out) {
+  const ks = tree.kids.get(a.id) || [], n = { a, ks: [], w: CW, h: CH, group: false };
+  out.set(a.id, n); if (!ks.length) return n;
+  n.ks = ks.map(k => measure(tree, k, maxW, out)); n.group = true;
+  const rows = []; let row = [], rw = 0;
+  for (const k of n.ks) { if (row.length && rw + GAP + k.w > maxW - 2 * GP) { rows.push(row); row = []; rw = 0; } row.push(k); rw += (row.length > 1 ? GAP : 0) + k.w; }
+  rows.push(row); n.rows = rows; n.rowW = rows.map(r => r.reduce((s, k) => s + k.w, 0) + GAP * (r.length - 1));
+  n.w = Math.max(CW, ...n.rowW) + 2 * GP;
+  n.h = GP + CH + HG + rows.reduce((s, r) => s + Math.max(...r.map(k => k.h)), 0) + GAP * (rows.length - 1) + GP;
+  return n;
+}
+function place(n, x, y, pos) {
+  pos.set(n.a.id, { gx: x, gy: y, gw: n.w, gh: n.h, group: n.group, cx: x + (n.w - CW) / 2, cy: n.group ? y + GP : y });
+  if (!n.group) return;
+  let yy = y + GP + CH + HG;
+  n.rows.forEach((r, i) => { let xx = x + (n.w - n.rowW[i]) / 2; for (const k of r) { place(k, xx, yy, pos); xx += k.w + GAP; } yy += Math.max(...r.map(k => k.h)) + GAP; });
+}
+function layout(snap) {
+  const tree = buildTree(snap); if (!tree) return;
+  const stage = $('stage'), maxW = Math.max(CW * 2 + 3 * GP, stage.clientWidth - 60), nodes = new Map(), rn = measure(tree, tree.root, maxW, nodes);
+  const pos = new Map(), W = Math.max(stage.clientWidth, rn.w + 60), top = 56; place(rn, (W - rn.w) / 2, top, pos);
+  pos.set('user', { cx: (W - 90) / 2, cy: 12, gx: 0, gy: 0, gw: 90, gh: 30, group: false });
+  V.pos = pos; V.world = { w: W, h: Math.max(stage.clientHeight - 4, top + rn.h + 40) }; V.rootId = tree.root.id;
+  $('world').style.width = V.world.w + 'px'; $('world').style.height = V.world.h + 'px'; fitCanvas();
+}
+
+/* ---------- DOM: groups + cards ---------- */
+function ensureDom(snap) {
+  const names = nameMap(snap), ids = new Set(snap.agents.map(a => a.id).concat(['user']));
+  for (const [id, el] of V.cards) if (!ids.has(id)) { el.remove(); V.cards.delete(id); }
+  for (const [id, el] of V.groups) if (!ids.has(id) || !(V.pos.get(id) || {}).group) { el.remove(); V.groups.delete(id); }
+  for (const id of ids) {
+    const p = V.pos.get(id); if (!p) continue;
+    let c = V.cards.get(id);
+    if (!c) { c = document.createElement('div'); c.className = id === 'user' ? 'you' : 'card'; c.dataset.id = id;
+      if (id === 'user') c.textContent = 'YOU'; else c.onclick = () => selectAgent(id); $('world').append(c); V.cards.set(id, c); }
+    c.style.left = p.cx + 'px'; c.style.top = p.cy + 'px';
+    if (p.group) {
+      let g = V.groups.get(id);
+      if (!g) { g = document.createElement('div'); g.className = 'group'; g.innerHTML = '<span class="gl"></span>'; $('world').prepend(g); V.groups.set(id, g); }
+      g.style.left = p.gx + 'px'; g.style.top = p.gy + 'px'; g.style.width = p.gw + 'px'; g.style.height = p.gh + 'px'; g.classList.toggle('root', id === V.rootId);
+      g.firstChild.textContent = (id === V.rootId ? 'SESSION · ' : 'GROUP · ') + names.get(id).toUpperCase() + ' · ' + snap.agents.filter(a => a.parent === id).length + ' sub-agent(s)';
+    }
+  }
+}
+function renderCards(snap) {
+  const names = nameMap(snap), now = nowOf(snap);
+  for (const a of snap.agents) {
+    const c = V.cards.get(a.id); if (!c) continue;
+    const st = effStatus(a, snap), col = colorOf(snap.id, a.id);
+    c.style.setProperty('--c', col); const g = V.groups.get(a.id); if (g) g.style.setProperty('--c', col);
+    c.className = 'card ' + st + (V.agent === a.id ? ' sel' : '') + (c.classList.contains('flash') ? ' flash' : '');
+    const elapsed = (a.end || (st === 'idle' || st === 'done' ? a.last : now)) - a.first;
+    const icon = st === 'running' ? (TOOLICON[a.actTool] || '⚙') : st === 'delegating' ? '⇢' : st === 'thinking' ? '◌' : st === 'done' ? '✓' : '·';
+    const actTxt = st === 'running' ? `${a.actTool} · ${a.act.replace(/^\S+ · /, '')}` : st === 'idle' && a.status !== 'idle' ? 'idle' : a.act;
+    const since = (st === 'running' || st === 'delegating') ? ` ${fmtD(now - a.actSince)}` : '';
+    c.innerHTML = `<div class="r1"><span class="sd ${st}"></span><span class="nm">${esc(names.get(a.id))}</span><span class="mc ${mclass(a.model)}">${esc(shortModel(a.model))}</span></div>`
+      + `<div class="r2">${esc(a.id === 'main' ? (snap.title || 'orchestrator') : a.desc || a.type)}</div>`
+      + `<div class="r3">${icon} ${esc(actTxt)}<span style="color:var(--dim)">${esc(since)}</span></div>`
+      + `<div class="r4"><span>⏱ <b>${fmtD(elapsed)}</b></span><span>ctx <b>${fmtK(a.tok.ctx)}</b></span><span>out <b>${fmtK(a.tok.out)}</b></span><span>⚙ <b>${a.tools}</b></span></div>`;
+  }
+  const y = V.cards.get('user'); if (y) y.style.setProperty('--c', '#e8f1ff');
+}
+
+/* ---------- detail panel ---------- */
+function selectAgent(id) { V.agent = id; V.detailSig = ''; V.rosterSig = ''; setFilter(id === 'main' ? null : id); renderAll(); }
+function renderDetail(snap) {
+  const box = $('detail');
+  if (!snap) { box.innerHTML = '<div class="d-sub">Select an agent once a session is running.</div>'; $('dsel').textContent = ''; return; }
+  const byId = agentsOf(snap), a = byId.get(V.agent) || byId.get('main'); if (!a) return;
+  const names = nameMap(snap), st = effStatus(a, snap), col = colorOf(snap.id, a.id), now = nowOf(snap);
+  const sig = JSON.stringify([snap.id, a.id, st, a.act, a.textTs, a.tok, a.tools, a.model, a.effort, a.recent.length, a.end, a.calls, byId.size, a.result.length]);
+  const tick = () => { const n = nowOf(snap);
+    const el = box.querySelector('[data-t=el]'); if (el) el.textContent = fmtD((a.end || (st === 'idle' || st === 'done' ? a.last : n)) - a.first);
+    const sn = box.querySelector('[data-t=since]'); if (sn) sn.textContent = fmtD(n - a.actSince); };
+  if (sig === V.detailSig) { tick(); return; }
+  V.detailSig = sig;
+  const keepScroll = (box.querySelector('.msgbox.last') || {}).scrollTop || 0, keepTop = box.scrollTop;
+  const t = a.tok, tot = t.in + t.cw + t.cr + t.out || 1, kids = snap.agents.filter(x => x.parent === a.id), parent = a.parent && byId.get(a.parent);
+  const elapsed = (a.end || (st === 'idle' || st === 'done' ? a.last : now)) - a.first;
+  const nowTxt = st === 'running' ? `${a.actTool} · ${a.act.replace(/^\S+ · /, '')}` : st === 'idle' && a.status !== 'idle' ? 'idle' : a.act;
+  const stLabel = { running: 'RUNNING TOOL', thinking: 'THINKING', delegating: 'DELEGATING', idle: 'IDLE', done: 'FINISHED' }[st];
+  const hist = Object.entries(a.hist).sort((x, y) => y[1] - x[1]).map(([k, v]) => `<span>${esc(k)} <b>${v}</b></span>`).join('');
+  const rec = a.recent.slice().reverse().map(r => `<span class="tn">${esc(r.n)}</span><span class="${r.err ? 'te' : ''}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.s)}</span><span>${fmtD(r.ms)}</span>`).join('');
+  box.style.setProperty('--c', col);
+  box.innerHTML =
+    `<div class="d-head"><span class="sd ${st}" style="--c:${col}"></span><span class="nm">${esc(names.get(a.id))}</span><span class="mc ${mclass(a.model)}">${esc(shortModel(a.model))}</span>`
+    + (a.effort ? `<span class="badge">effort ${esc(a.effort)}</span>` : '') + (a.bg ? '<span class="badge">background</span>' : '') + `</div>`
+    + `<div class="d-sub">${esc(a.id === 'main' ? 'orchestrator (main agent)' : a.type + (a.desc ? ' — ' + a.desc : ''))}${parent ? ' · spawned by <b>' + esc(names.get(parent.id)) + '</b>' : ''}</div>`
+    + `<div class="now"><div class="lbl">${stLabel}${st === 'running' || st === 'delegating' ? ' · <span data-t="since">' + fmtD(now - a.actSince) + '</span>' : ''}</div><div class="big">${esc(nowTxt)}</div></div>`
+    + `<div class="grid"><div class="kv"><div class="k">ELAPSED</div><div class="v" data-t="el">${fmtD(elapsed)}</div></div>`
+    + `<div class="kv"><div class="k">TOOL TIME</div><div class="v">${fmtD(a.toolMs)}</div></div>`
+    + `<div class="kv"><div class="k">THINK TIME</div><div class="v">${a.thinkMs ? fmtD(a.thinkMs) : '—'}</div></div>`
+    + `<div class="kv"><div class="k">CONTEXT NOW</div><div class="v">${fmtK(t.ctx)}</div></div>`
+    + `<div class="kv"><div class="k">API CALLS</div><div class="v">${a.calls}</div></div>`
+    + `<div class="kv"><div class="k">TOOL CALLS</div><div class="v">${a.tools}</div></div></div>`
+    + `<div class="sec"><span>TOKENS</span><span>${fmtK(t.in + t.cw + t.cr + t.out)} total</span></div>`
+    + `<div class="bar"><i style="width:${t.in / tot * 100}%;background:#4da3ff"></i><i style="width:${t.cw / tot * 100}%;background:#ffb02e"></i><i style="width:${t.cr / tot * 100}%;background:#2effa8"></i><i style="width:${t.out / tot * 100}%;background:#ff3df2"></i></div>`
+    + `<div class="legend2"><span><i class="sw" style="background:#4da3ff"></i>input <b>${fmtK(t.in)}</b></span><span><i class="sw" style="background:#ffb02e"></i>cache write <b>${fmtK(t.cw)}</b></span><span><i class="sw" style="background:#2effa8"></i>cache read <b>${fmtK(t.cr)}</b></span><span><i class="sw" style="background:#ff3df2"></i>output <b>${fmtK(t.out)}</b>${t.think ? ' (thinking ' + fmtK(t.think) + ')' : ''}</span></div>`
+    + (kids.length ? `<div class="sec"><span>SUB-AGENTS (${kids.length})</span></div><div class="kids">${kids.map(k => `<button data-k="${esc(k.id)}" style="border-color:${colorOf(snap.id, k.id)};color:${colorOf(snap.id, k.id)}">${esc(names.get(k.id))} · ${esc(effStatus(k, snap))}</button>`).join('')}</div>` : '')
+    + `<div class="sec"><span>${a.id === 'main' ? 'LAST MESSAGE' : 'LAST MESSAGE / RESULT'}</span><span>${a.textTs ? new Date(a.textTs).toLocaleTimeString([], { hour12: false }) : ''}</span></div>`
+    + `<div class="msgbox last">${a.text ? esc(a.text) : '<span style="color:var(--dim)">no message yet</span>'}</div>`
+    + (a.task ? `<div class="sec"><span>TASK GIVEN</span></div><div class="msgbox task">${esc(a.task)}</div>` : '')
+    + (hist ? `<div class="sec"><span>TOOLS USED</span></div><div class="hist">${hist}</div>` : '')
+    + (rec ? `<div class="sec"><span>RECENT TOOL CALLS</span></div><div class="tl">${rec}</div>` : '');
+  box.querySelectorAll('[data-k]').forEach(b => b.onclick = () => selectAgent(b.dataset.k));
+  box.scrollTop = keepTop; const mb = box.querySelector('.msgbox.last'); if (mb) mb.scrollTop = keepScroll;
+  $('dsel').textContent = names.get(a.id);
+}
+
+/* ---------- message stream ---------- */
+const feed = $('feed');
+const matches = (ev, f) => (!f || [ev.agent, ev.from, ev.to].includes(f)) && V.kinds.has(ev.kind);
+function updateCount() {
+  const snap = cur(), total = snap ? (MC.S.events.get(snap.id) || []).length : 0;
+  $('fcount').textContent = total ? ` · ${feed.querySelectorAll('.msg:not([hidden])').length} of ${total}` : '';
+}
+function chipEl(snap, id) { const s = document.createElement('span'); s.className = 'chip'; s.dataset.id = id; s.style.background = colorOf(snap.id, id); s.textContent = nameMap(snap).get(id) || id; return s; }
+function addFeed(ev, snap) {
+  const el = document.createElement('div'), agent = ev.agent || ev.from, sp = (t, c) => Object.assign(document.createElement('span'), { textContent: t, className: c || '' });
+  el.className = 'msg ' + (ev.kind === 'tool' ? 'tool' : ev.kind === 'text' ? 'text' : ''); el.style.setProperty('--c', colorOf(ev.session, agent)); el._ev = ev;
+  const top = document.createElement('div'); top.className = 'top'; top.append(sp(new Date(ev.ts).toLocaleTimeString([], { hour12: false })));
+  if (['handoff', 'result', 'prompt'].includes(ev.kind)) top.append(chipEl(snap, ev.from), sp('→'), chipEl(snap, ev.to));
+  else top.append(chipEl(snap, agent), sp(ev.tool || 'says'));
+  if (ev.kind !== 'tool') top.append(sp(ev.kind === 'handoff' ? 'task' : ev.kind, 'kind'));
+  el.append(top, Object.assign(document.createElement('div'), { className: 'body', textContent: ev.text || '' }));
+  el.onclick = () => el.classList.toggle('open'); el.hidden = !matches(ev, V.filter);
+  const stick = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 50;
+  feed.append(el); while (V.limit && feed.children.length > V.limit) feed.firstChild.remove(); if (stick) feed.scrollTop = feed.scrollHeight;
+}
+function rebuildFeed() {
+  feed.innerHTML = ''; const snap = cur(); if (!snap) { updateCount(); return; }
+  const all = MC.S.events.get(snap.id) || []; for (const ev of V.limit ? all.slice(-V.limit) : all) addFeed(ev, snap);
+  V.feedSid = snap.id; feed.scrollTop = feed.scrollHeight; updateCount();
+}
+function refreshChips(snap) { const names = nameMap(snap); feed.querySelectorAll('.chip').forEach(c => { c.textContent = names.get(c.dataset.id) || c.dataset.id; c.style.background = colorOf(snap.id, c.dataset.id); }); }
+function setFilter(f) {
+  V.filter = f; const fe = $('filter'); fe.hidden = !f; const snap = cur();
+  if (f && snap) fe.textContent = 'FILTER: ' + (nameMap(snap).get(f) || f) + ' ✕';
+  feed.querySelectorAll('.msg').forEach(m => m.hidden = !matches(m._ev, f)); updateCount();
+}
+$('filter').onclick = () => { V.agent = 'main'; V.detailSig = ''; setFilter(null); renderAll(); };
+document.querySelectorAll('#fctl input').forEach(i => { i.checked = V.kinds.has(i.dataset.k);
+  i.onchange = () => { i.checked ? V.kinds.add(i.dataset.k) : V.kinds.delete(i.dataset.k); saveFeed(); feed.querySelectorAll('.msg').forEach(m => m.hidden = !matches(m._ev, V.filter)); updateCount(); }; });
+$('flimit').value = String(V.limit); $('flimit').onchange = e => { V.limit = Number(e.target.value); saveFeed(); rebuildFeed(); };
+
+/* ---------- roster: every agent of the session, nothing is ever dropped ---------- */
+let tab = 'tl';
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
+  tab = b.dataset.tab; document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === b));
+  $('tw').classList.toggle('ro', tab === 'ro'); $('roster').hidden = tab !== 'ro'; V.rosterSig = ''; renderRoster(cur()); });
+function renderRoster(snap) {
+  if (!snap) { $('rocount').textContent = '0'; $('roster').innerHTML = ''; return; }
+  $('rocount').textContent = snap.agents.filter(a => a.id !== 'main').length;
+  if (tab !== 'ro') return;
+  const names = nameMap(snap), now = nowOf(snap), list = [...snap.agents].sort((a, b) => a.first - b.first);
+  const sig = JSON.stringify([snap.id, V.agent, Math.floor(now / 2000), list.map(a => [a.id, effStatus(a, snap), a.tok.out, a.tools, a.end, a.last, a.result.length, a.textTs, a.model])]);
+  if (sig === V.rosterSig) return; V.rosterSig = sig;
+  const box = $('roster'), keep = box.scrollTop, clip = (s, n) => (s || '').replace(/\s+/g, ' ').slice(0, n);
+  box.innerHTML = '<table><thead><tr><th>AGENT</th><th>MODEL</th><th>STARTED</th><th>TIME</th><th>OUT</th><th>TOOLS</th><th>STATE</th><th>TASK</th><th>LAST MESSAGE / RESULT</th></tr></thead><tbody>'
+    + list.map(a => { const st = effStatus(a, snap), col = colorOf(snap.id, a.id), el = (a.end || (st === 'idle' || st === 'done' ? a.last : now)) - a.first;
+      return `<tr class="row${V.agent === a.id ? ' sel' : ''}" data-id="${esc(a.id)}" style="--c:${col}"><td style="padding-left:${8 + a.depth * 14}px"><span class="sd ${st}" style="display:inline-block;--c:${col}"></span> <span class="nm">${esc(names.get(a.id))}</span></td>`
+        + `<td><span class="mc ${mclass(a.model)}">${esc(shortModel(a.model))}</span></td><td>${new Date(a.first).toLocaleTimeString([], { hour12: false })}</td><td>${fmtD(el)}</td>`
+        + `<td>${fmtK(a.tok.out)}</td><td>${a.tools}</td><td>${esc(st)}</td><td title="${esc(a.desc || a.task)}">${esc(clip(a.desc || a.task, 48))}</td><td title="${esc(a.result || a.text)}">${esc(clip(a.result || a.text, 90))}</td></tr>`; }).join('')
+    + '</tbody></table>';
+  box.scrollTop = keep; box.querySelectorAll('tr.row').forEach(r => r.onclick = () => selectAgent(r.dataset.id));
+}
+
+/* ---------- canvas: links, travelling messages ---------- */
+const gc = $('graph'), g = gc.getContext('2d'), tc = $('tl'), t2 = tc.getContext('2d');
+function fitCanvas() { const r = devicePixelRatio || 1, W = V.world ? V.world.w : 100, H = V.world ? V.world.h : 100;
+  gc.width = W * r; gc.height = H * r; gc.style.width = W + 'px'; gc.style.height = H + 'px'; g.setTransform(r, 0, 0, r, 0, 0); }
+function fitTl() { const r = devicePixelRatio || 1, w = $('tw'); tc.width = w.clientWidth * r; tc.height = w.clientHeight * r; t2.setTransform(r, 0, 0, r, 0, 0); }
+new ResizeObserver(() => { fitTl(); V.sig = ''; renderAll(); }).observe($('stage'));
+new ResizeObserver(fitTl).observe($('tw'));
+
+function anchor(a, b, lane) {
+  const pa = V.pos.get(a), pb = V.pos.get(b); if (!pa || !pb) return null;
+  const ha = a === 'user' ? 30 : CH, hb = b === 'user' ? 30 : CH, wa = a === 'user' ? 90 : CW, wb = b === 'user' ? 90 : CW, down = pb.cy >= pa.cy;
+  const x1 = pa.cx + wa / 2 + lane, y1 = down ? pa.cy + ha : pa.cy, x2 = pb.cx + wb / 2 + lane, y2 = down ? pb.cy : pb.cy + hb, dy = (y2 - y1) * .5;
+  return { x1, y1, x2, y2, c1y: y1 + dy, c2y: y2 - dy };
+}
+const pt = (an, q) => { const u = 1 - q; return [u * u * u * an.x1 + 3 * u * u * q * an.x1 + 3 * u * q * q * an.x2 + q * q * q * an.x2,
+                                              u * u * u * an.y1 + 3 * u * u * q * an.c1y + 3 * u * q * q * an.c2y + q * q * q * an.y2]; };
+const pairKey = ev => ev.kind === 'result' ? ev.to + '|' + ev.from : ev.from + '|' + ev.to;   // always parent|child
+
+function drawGraph(now) {
+  if (!V.world) return; g.clearRect(0, 0, V.world.w, V.world.h);
+  const snap = cur(); if (!snap) return; const ff = getComputedStyle(document.body).fontFamily;
+  const pairs = [['user', V.rootId]]; for (const a of snap.agents) if (a.parent && a.id !== V.rootId) pairs.push([a.parent, a.id]);
+  for (const [a, b] of pairs) {
+    const an = anchor(a, b, 0); if (!an) continue;
+    const key = a + '|' + b, heat = Math.max(0, 1 - (now - (V.heat.get(key) || 0)) / 6000), col = colorOf(snap.id, b === V.rootId ? 'main' : b);
+    g.beginPath(); g.moveTo(an.x1, an.y1); g.bezierCurveTo(an.x1, an.c1y, an.x2, an.c2y, an.x2, an.y2);
+    g.strokeStyle = alpha(col, .22 + heat * .6); g.lineWidth = 1.2 + heat * 1.8; g.shadowColor = col; g.shadowBlur = heat * 12; g.stroke(); g.shadowBlur = 0;
+    const note = V.notes.get(key);       // the last message that crossed this link stays readable for a few seconds
+    if (note && now - note.t < 7000) {
+      const [x, y] = pt(an, .5), age = (now - note.t) / 7000, txt = (note.kind === 'result' ? '▲ ' : '▼ ') + note.text;
+      g.font = '10.5px ' + ff; const w = Math.min(g.measureText(txt).width + 12, 280);
+      g.globalAlpha = 1 - age * age; g.fillStyle = 'rgba(4,6,12,.9)'; g.strokeStyle = alpha(note.kind === 'result' ? colorOf(snap.id, b) : col, .8); g.lineWidth = 1;
+      g.beginPath(); g.roundRect(x - w / 2, y - 9, w, 18, 5); g.fill(); g.stroke();
+      g.fillStyle = '#cfe3ff'; g.textAlign = 'center'; g.fillText(txt.length > 44 ? txt.slice(0, 43) + '…' : txt, x, y + 4); g.textAlign = 'left'; g.globalAlpha = 1;
+    }
+  }
+  V.particles = V.particles.filter(p => {
+    if (p.sid !== snap.id) return false;
+    const an = anchor(p.from, p.to, p.kind === 'result' ? 9 : -9);
+    if (!an) return now - p.born < 4000;
+    p.p += 0.014; V.heat.set(p.from + '|' + p.to, now); V.heat.set(p.to + '|' + p.from, now);
+    if (p.p >= 1) { V.rings.push({ id: p.to, r: 0, c: p.col }); const c = V.cards.get(p.to); if (c) { c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); } return false; }
+    for (let i = 0; i < 9; i++) { const pp = p.p - i * .02; if (pp < 0) break; const [x, y] = pt(an, pp);
+      g.beginPath(); g.arc(x, y, (p.kind === 'result' ? 3.6 : 3.2) - i * .26, 0, 7); g.fillStyle = alpha(p.col, 1 - i / 9); g.shadowColor = p.col; g.shadowBlur = 14; g.fill(); }
+    g.shadowBlur = 0; return true;
+  });
+  V.rings = V.rings.filter(r => { const p = V.pos.get(r.id); if (!p) return false; r.r += 1.5; if (r.r > 40) return false;
+    g.strokeStyle = alpha(r.c, 1 - r.r / 40); g.lineWidth = 2; g.beginPath();
+    g.roundRect(p.cx - r.r / 2, p.cy - r.r / 2, (r.id === 'user' ? 90 : CW) + r.r, (r.id === 'user' ? 30 : CH) + r.r, 12 + r.r / 3); g.stroke(); return true; });
+}
+
+/* ---------- timeline ---------- */
+function drawTimeline() {
+  const w = $('tw'), W = w.clientWidth, H = w.clientHeight; t2.clearRect(0, 0, W, H);
+  const snap = cur(); if (!snap || !snap.agents.length) return; const tree = buildTree(snap), names = nameMap(snap), order = [];
+  const dfs = (a, d) => { order.push([a, d]); for (const k of tree.kids.get(a.id) || []) dfs(k, d + 1); }; if (tree) dfs(tree.root, 0);
+  const wv = $('win').value, end = nowOf(snap), span = Math.max(60000, end - snap.first), win = wv === 'auto' ? Math.min(span, 1800000) : (Number(wv) || span), x0 = end - win;
+  const L = 130, top = 24, lane = Math.min(22, (H - top - 6) / order.length), X = t => L + (t - x0) / win * (W - L - 14);
+  t2.font = '10px ' + getComputedStyle(document.body).fontFamily;
+  const step = win <= 90000 ? 10000 : win <= 600000 ? 60000 : win <= 3600000 ? 300000 : win <= 21600000 ? 1800000 : 7200000;
+  for (let s = Math.ceil(x0 / step) * step; s < end; s += step) { if (X(s) < L + 20) continue;
+    t2.strokeStyle = 'rgba(120,150,200,.12)'; t2.beginPath(); t2.moveTo(X(s), top - 4); t2.lineTo(X(s), H); t2.stroke();
+    t2.fillStyle = 'rgba(120,150,200,.55)'; t2.textAlign = 'center'; t2.fillText('-' + fmtD(end - s), X(s), top - 8); }
+  const evs = MC.S.events.get(snap.id) || [];
+  order.forEach(([a, d], i) => {
+    const y = top + i * lane, c = colorOf(snap.id, a.id), st = effStatus(a, snap);
+    t2.fillStyle = i % 2 ? 'rgba(255,255,255,.015)' : 'transparent'; t2.fillRect(0, y, W, lane);
+    t2.fillStyle = c; t2.textAlign = 'left'; t2.fillText(names.get(a.id).slice(0, 18 - d * 2), 10 + d * 10, y + lane / 2 + 3);
+    const s0 = X(Math.max(a.first, x0 - 1)), s1 = X(Math.min(a.end || (st === 'idle' || st === 'done' ? a.last : end), end));
+    if (s1 > L) { const live = !a.end && st !== 'idle' && st !== 'done';
+      t2.fillStyle = alpha(c, .26); t2.strokeStyle = alpha(c, .9); t2.shadowColor = c; t2.shadowBlur = live ? 10 : 0; t2.beginPath();
+      t2.roundRect(Math.max(L, s0), y + 3, Math.max(3, s1 - Math.max(L, s0)), lane - 6, 3); t2.fill(); t2.stroke(); t2.shadowBlur = 0; }
+    if (s1 <= L) { t2.fillStyle = 'rgba(120,150,200,.65)'; t2.textAlign = 'left'; t2.fillText('◂ ended ' + fmtD(end - (a.end || a.last)) + ' ago (outside this window)', L + 8, y + lane / 2 + 3); }
+    t2.fillStyle = '#fff'; for (const ev of evs) if (ev.kind === 'tool' && ev.agent === a.id && ev.ts > x0 && ev.ts <= end) t2.fillRect(X(ev.ts) - 1, y + lane / 2 - 4, 2, 8);
+  });
+  t2.strokeStyle = 'rgba(255,255,255,.35)'; t2.beginPath(); t2.moveTo(W - 14, top - 4); t2.lineTo(W - 14, H); t2.stroke();
+}
+
+/* ---------- render orchestration ---------- */
+function renderAll() {
+  const snap = cur(); $('hint').hidden = !!snap; $('strip').innerHTML = MC.stripHTML(snap);
+  if (!snap) { renderDetail(null); return; }
+  if (V.feedSid !== snap.id) { sessionReset(); rebuildFeed(); }
+  const sig = snap.id + '|' + snap.agents.map(a => a.id + '>' + a.parent).join(',') + '|' + $('stage').clientWidth;
+  if (sig !== V.sig) { V.sig = sig; layout(snap); ensureDom(snap); }
+  renderCards(snap); renderDetail(snap); refreshChips(snap); renderRoster(snap); updateCount();
+}
+function sessionReset() {
+  V.agent = 'main'; V.filter = null; V.detailSig = ''; V.sig = ''; V.particles = []; V.rings = []; V.notes.clear(); V.heat.clear(); $('filter').hidden = true;
+  for (const el of V.cards.values()) el.remove(); for (const el of V.groups.values()) el.remove(); V.cards.clear(); V.groups.clear(); V.feedSid = null;
+}
+(function loop() { drawGraph(Date.now()); drawTimeline(); requestAnimationFrame(loop); })();
+
+MC.start({
+  id: 'mission',
+  onSession() { sessionReset(); feed.innerHTML = ''; renderAll(); },
+  onSnap() { renderAll(); },
+  onTick() { renderAll(); },
+  onReset() { sessionReset(); feed.innerHTML = ''; renderAll(); },
+  onTheme() { V.sig = ''; renderAll(); rebuildFeed(); },
+  onEvent(ev, snap) {
+    addFeed(ev, snap);
+    if (['handoff', 'result', 'prompt'].includes(ev.kind)) {
+      V.notes.set(pairKey(ev), { text: (ev.text || '').replace(/\s+/g, ' ').slice(0, 60), kind: ev.kind, t: Date.now() });
+      if (MC.isFresh(ev)) { V.particles.push({ sid: ev.session, from: ev.from, to: ev.to, kind: ev.kind, born: Date.now(), p: 0, col: colorOf(ev.session, ev.kind === 'result' ? ev.from : ev.to) });
+        if (V.particles.length > 40) V.particles.shift(); }
+    }
+  },
+});
+fitTl();
+</script>
+</body>
+</html>
