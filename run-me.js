@@ -28,6 +28,7 @@ const EVENTS = {
   PostToolUse: 'Task|Agent',
   SubagentStop: null,
   Stop: null,
+  Notification: null,   // fires when a permission dialog opens in the terminal -> "blocked" badge (never waits, never answers)
 };
 
 const args = process.argv.slice(2);

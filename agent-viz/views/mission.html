@@ -37,16 +37,49 @@ main{flex:1;display:grid;grid-template-columns:1fr 430px;grid-template-rows:1fr 
 .sd.thinking{background:var(--c);box-shadow:0 0 9px var(--c);animation:blink .8s infinite}
 .sd.delegating{background:#ffb02e;box-shadow:0 0 9px #ffb02e;animation:blink 1.2s infinite}
 .sd.done{background:#3a7}
+.card.blocked,.card.asking{border-color:var(--wait);animation:waitpulse 1.6s infinite}
+.card.blocked .r3,.card.asking .r3{background:color-mix(in srgb,var(--wait) 22%,transparent);color:var(--wait);font-weight:600}
+.sd.blocked,.sd.asking{background:var(--wait);box-shadow:0 0 9px var(--wait);animation:blink .7s infinite}
+.now.wait{border-color:var(--wait);background:color-mix(in srgb,var(--wait) 12%,transparent);animation:waitpulse 1.6s infinite}
+.now.wait .lbl{color:var(--wait)}
+.now .hint2{font-size:10.5px;color:var(--dim);margin-top:4px}
+/* progress: bar along the bottom of a busy card, and in the detail panel */
+.pb{height:4px;border-radius:3px;overflow:hidden;background:color-mix(in srgb,var(--c) 14%,transparent);opacity:0;transition:opacity .4s}
+.pb.on{opacity:1}
+.pb i{display:block;height:100%;width:0;border-radius:3px;background:var(--c);box-shadow:0 0 8px var(--c);transition:width 1s linear}
+.pb.over i{background:repeating-linear-gradient(-45deg,var(--c) 0 6px,color-mix(in srgb,var(--c) 40%,transparent) 6px 12px);background-size:17px 17px;animation:pbstripe .8s linear infinite}
+.pb.ind i{width:30%!important;transition:none;animation:pbslide 1.6s ease-in-out infinite}
+@keyframes pbslide{from{transform:translateX(-100%)}to{transform:translateX(335%)}}
+@keyframes pbstripe{to{background-position:17px 0}}
+.card .pb{position:absolute;left:3px;right:3px;bottom:2px}
+.card .r3{display:flex;align-items:center;gap:3px}
+.card .r3 .at{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.card .r3 .ae{flex:none;color:var(--dim);font-size:10.5px}.card .r3 .ae.over{color:var(--wait)}
+.card .r4{bottom:9px}
+.spin{display:inline-block;width:9px;height:9px;margin-right:5px;vertical-align:-1px;border-radius:50%;border:1.5px solid color-mix(in srgb,var(--c) 30%,transparent);border-top-color:var(--c);animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.dp{margin-top:8px}.dp .pt{font-size:10.5px;color:var(--dim);margin-top:4px}
+.dp.life{border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin:-2px 0 10px}
+.dp.life .lbl{font-size:10px;letter-spacing:.12em;color:var(--dim);margin-bottom:5px}
+.qs{margin:6px 0 0;display:flex;flex-direction:column;gap:6px}
+.qs .qq{color:var(--text);font-weight:600}
+.qs ol{margin:2px 0 0;padding-left:20px;color:var(--text)}
+.qs li span{color:var(--dim)}
 .you{position:absolute;z-index:3;width:90px;height:30px;border:1.5px solid #e8f1ff;border-radius:15px;color:#e8f1ff;text-align:center;line-height:27px;font-weight:700;letter-spacing:.15em;
-  background:rgba(232,241,255,.08);box-shadow:0 0 14px rgba(232,241,255,.25)}
+  background:rgba(232,241,255,.08);box-shadow:0 0 14px rgba(232,241,255,.25);cursor:pointer}
+.you.sel{outline:2px solid #e8f1ff;outline-offset:2px}
+.you.turn{--wait:#3dff7a;border-color:var(--wait);color:var(--wait);background:color-mix(in srgb,var(--wait) 14%,transparent);animation:waitpulse 1.4s infinite}
+.you .yt{position:absolute;left:50%;top:35px;transform:translateX(-50%);white-space:nowrap;font-size:10px;letter-spacing:.1em;line-height:16px;
+  padding:0 8px;border-radius:4px;background:var(--wait);color:#05070d}
+.now.turn{--c:#3dff7a;animation:waitpulse 1.4s infinite;--wait:#3dff7a}
+.now.turn .lbl{color:#3dff7a}
 .hint{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);text-align:center;color:var(--dim);pointer-events:none;transition:opacity .6s}
 .hint big{display:block;color:var(--accent);letter-spacing:.3em;margin-bottom:8px;text-shadow:0 0 14px var(--accent)}
 
 aside{grid-row:1/3;grid-column:2;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
 aside h2{margin:0;padding:7px 12px;font-size:10.5px;letter-spacing:.2em;color:var(--dim);border-bottom:1px solid var(--line);border-top:1px solid var(--line);font-weight:500;display:flex;justify-content:space-between;flex:none}
-aside h2:first-child{border-top:0}
-#detail{flex:0 0 58%;overflow-y:auto;padding:10px 12px;min-height:0}
-#feedwrap{flex:1;display:flex;flex-direction:column;min-height:0}
+aside>h2:first-child{border-top:0}
+#detail{flex:1.5 1 0;overflow-y:auto;padding:10px 12px;min-height:0}
 #filter{color:var(--accent);cursor:pointer}
 #feed{flex:1;overflow-y:auto;overflow-x:hidden;padding:7px 10px;display:flex;flex-direction:column;gap:5px}
 .d-head{display:flex;align-items:center;gap:8px;margin-bottom:2px}
@@ -120,7 +153,7 @@ aside h2:first-child{border-top:0}
   <aside>
     <h2><span>AGENT DETAIL</span><span id="dsel" style="color:var(--dim)"></span></h2>
     <div id="detail"></div>
-    <div id="feedwrap">
+    <section class="fold" data-fold="feed" id="feedwrap">
       <h2><span>MESSAGE STREAM<span id="fcount"></span></span><span id="filter" hidden></span></h2>
       <div id="fctl">
         <label><input type="checkbox" data-k="prompt" checked>prompts</label><label><input type="checkbox" data-k="handoff" checked>tasks</label>
@@ -129,7 +162,8 @@ aside h2:first-child{border-top:0}
         <select id="flimit" title="How many messages to keep on screen"><option value="400">last 400</option><option value="2000" selected>last 2000</option><option value="0">show all</option></select>
       </div>
       <div id="feed"></div>
-    </div>
+    </section>
+    <section class="fold" data-fold="usage"><h2><span>TOOLS · SKILLS · MCP</span></h2><div class="us" id="usage"></div></section>
   </aside>
   <div class="timeline" id="tw">
     <canvas id="tl"></canvas>
@@ -187,7 +221,7 @@ function ensureDom(snap) {
     const p = V.pos.get(id); if (!p) continue;
     let c = V.cards.get(id);
     if (!c) { c = document.createElement('div'); c.className = id === 'user' ? 'you' : 'card'; c.dataset.id = id;
-      if (id === 'user') c.textContent = 'YOU'; else c.onclick = () => selectAgent(id); $('world').append(c); V.cards.set(id, c); }
+      if (id === 'user') { c.textContent = 'YOU'; c.title = 'Click: your turn, your last prompt and Claude\'s last message'; c.onclick = () => selectAgent('user'); } else { c.innerHTML = '<div class="cb"></div><div class="pb"><i></i></div>'; c.onclick = () => selectAgent(id); } $('world').append(c); V.cards.set(id, c); }
     c.style.left = p.cx + 'px'; c.style.top = p.cy + 'px';
     if (p.group) {
       let g = V.groups.get(id);
@@ -205,15 +239,36 @@ function renderCards(snap) {
     c.style.setProperty('--c', col); const g = V.groups.get(a.id); if (g) g.style.setProperty('--c', col);
     c.className = 'card ' + st + (V.agent === a.id ? ' sel' : '') + (c.classList.contains('flash') ? ' flash' : '');
     const elapsed = (a.end || (st === 'idle' || st === 'done' ? a.last : now)) - a.first;
-    const icon = st === 'running' ? (TOOLICON[a.actTool] || '⚙') : st === 'delegating' ? '⇢' : st === 'thinking' ? '◌' : st === 'done' ? '✓' : '·';
-    const actTxt = st === 'running' ? `${a.actTool} · ${a.act.replace(/^\S+ · /, '')}` : st === 'idle' && a.status !== 'idle' ? 'idle' : a.act;
-    const since = (st === 'running' || st === 'delegating') ? ` ${fmtD(now - a.actSince)}` : '';
-    c.innerHTML = `<div class="r1"><span class="sd ${st}"></span><span class="nm">${esc(names.get(a.id))}</span><span class="mc ${mclass(a.model)}">${esc(shortModel(a.model))}</span></div>`
+    const icon = st === 'blocked' ? '⏸' : st === 'asking' ? '❓' : st === 'running' ? (TOOLICON[a.actTool] || '⚙') : st === 'delegating' ? '⇢' : st === 'thinking' ? '◌' : st === 'done' ? '✓' : '·';
+    const actTxt = actText(a, st);
+    const busy = st === 'running' || st === 'delegating', pr = MC.progress(a, snap, now), life = a.id !== 'main' && MC.ACTIVE.includes(st) ? MC.lifeProgress(a, snap, now) : null;
+    const since = busy ? ' ' + MC.estText(pr, true) : MC.isBlocked(st) ? ` ${fmtD(now - a.actSince)}` : '';
+    setBar(c.lastChild, busy ? pr : null);
+    c.firstChild.innerHTML = `<div class="r1"><span class="sd ${st}"></span><span class="nm">${esc(names.get(a.id))}</span><span class="mc ${mclass(a.model)}">${esc(shortModel(a.model))}</span></div>`
       + `<div class="r2">${esc(a.id === 'main' ? (snap.title || 'orchestrator') : a.desc || a.type)}</div>`
-      + `<div class="r3">${icon} ${esc(actTxt)}<span style="color:var(--dim)">${esc(since)}</span></div>`
-      + `<div class="r4"><span>⏱ <b>${fmtD(elapsed)}</b></span><span>ctx <b>${fmtK(a.tok.ctx)}</b></span><span>out <b>${fmtK(a.tok.out)}</b></span><span>⚙ <b>${a.tools}</b></span></div>`;
+      + `<div class="r3">${busy ? `<span class="spin" style="animation-delay:-${Date.now() % 900}ms"></span>` : ''}${icon} <span class="at">${esc(actTxt)}</span><span class="ae${busy && pr.over ? ' over' : ''}">${esc(since)}</span></div>`
+      + `<div class="r4"><span>⏱ <b>${fmtD(elapsed)}</b>${life && life.est ? '/~' + fmtD(life.est) : ''}</span><span>ctx <b>${fmtK(a.tok.ctx)}</b></span><span>out <b>${fmtK(a.tok.out)}</b></span><span>⚙ <b>${a.tools}</b></span></div>`;
   }
-  const y = V.cards.get('user'); if (y) y.style.setProperty('--c', '#e8f1ff');
+  const y = V.cards.get('user'), turn = MC.yourTurn(snap);
+  if (y) { y.className = 'you' + (turn ? ' turn' : '') + (V.agent === 'user' ? ' sel' : '');
+    const html = 'YOU' + (turn ? `<span class="yt">▶ YOUR TURN · ${fmtD(now - turn)}</span>` : ''); if (y.innerHTML !== html) y.innerHTML = html; }
+}
+
+// a progress bar (.pb > i): fills towards the usual duration, striped once past it, sliding when there is nothing to compare with
+function setBar(el, p) {
+  if (!el) return;
+  const cls = 'pb' + (!p ? '' : p.frac == null ? ' on ind' : ' on' + (p.over ? ' over' : ''));
+  if (el.className !== cls) el.className = cls;
+  el.firstChild.style.width = p && p.frac != null ? (p.frac * 100).toFixed(1) + '%' : '';
+  el.title = !p ? '' : p.est ? `${MC.estText(p)} (typical of ${p.n} earlier runs)` : 'nothing similar ran before, no estimate yet';
+}
+
+// one line saying what the agent is doing (or what it is waiting on you for)
+function actText(a, st) {
+  if (st === 'blocked') return 'needs approval · ' + (a.actTool ? a.actTool + ' · ' : '') + a.act;
+  if (st === 'asking') return 'asking · ' + a.act;
+  if (st === 'running') return `${a.actTool} · ${a.act.replace(/^\S+ · /, '')}`;
+  return st === 'idle' && a.status !== 'idle' ? 'idle' : a.act;
 }
 
 /* ---------- detail panel ---------- */
@@ -221,19 +276,27 @@ function selectAgent(id) { V.agent = id; V.detailSig = ''; V.rosterSig = ''; set
 function renderDetail(snap) {
   const box = $('detail');
   if (!snap) { box.innerHTML = '<div class="d-sub">Select an agent once a session is running.</div>'; $('dsel').textContent = ''; return; }
+  if (V.agent === 'user') return renderYou(snap, box);
   const byId = agentsOf(snap), a = byId.get(V.agent) || byId.get('main'); if (!a) return;
   const names = nameMap(snap), st = effStatus(a, snap), col = colorOf(snap.id, a.id), now = nowOf(snap);
-  const sig = JSON.stringify([snap.id, a.id, st, a.act, a.textTs, a.tok, a.tools, a.model, a.effort, a.recent.length, a.end, a.calls, byId.size, a.result.length]);
+  const sig = JSON.stringify([snap.id, a.id, st, !!a.lifeEst, a.act, a.textTs, a.tok, a.tools, a.model, a.effort, a.recent.length, a.end, (a.shells || []).length, a.calls, byId.size, a.result.length]);
   const tick = () => { const n = nowOf(snap);
     const el = box.querySelector('[data-t=el]'); if (el) el.textContent = fmtD((a.end || (st === 'idle' || st === 'done' ? a.last : n)) - a.first);
-    const sn = box.querySelector('[data-t=since]'); if (sn) sn.textContent = fmtD(n - a.actSince); };
+    const sn = box.querySelector('[data-t=since]'); if (sn) sn.textContent = fmtD(n - a.actSince);
+    const runs = p => ` · typical of ${p.n} earlier run${p.n > 1 ? 's' : ''}${p.over ? ' · taking longer than usual' : ''}`;
+    const pa = box.querySelector('[data-t=pa]'); if (pa) { const p = MC.progress(a, snap, n); setBar(pa, p); pa.nextSibling.textContent = MC.estText(p) + (p.est ? runs(p) : ' · nothing similar ran before, no estimate yet'); }
+    const pl = box.querySelector('[data-t=pl]'); if (pl) { const p = MC.lifeProgress(a, snap, n); setBar(pl, p); pl.nextSibling.textContent = MC.estText(p) + runs(p); } };
   if (sig === V.detailSig) { tick(); return; }
   V.detailSig = sig;
   const keepScroll = (box.querySelector('.msgbox.last') || {}).scrollTop || 0, keepTop = box.scrollTop;
   const t = a.tok, tot = t.in + t.cw + t.cr + t.out || 1, kids = snap.agents.filter(x => x.parent === a.id), parent = a.parent && byId.get(a.parent);
   const elapsed = (a.end || (st === 'idle' || st === 'done' ? a.last : now)) - a.first;
-  const nowTxt = st === 'running' ? `${a.actTool} · ${a.act.replace(/^\S+ · /, '')}` : st === 'idle' && a.status !== 'idle' ? 'idle' : a.act;
-  const stLabel = { running: 'RUNNING TOOL', thinking: 'THINKING', delegating: 'DELEGATING', idle: 'IDLE', done: 'FINISHED' }[st];
+  const busy = st === 'running' || st === 'delegating', life = a.id !== 'main' && MC.ACTIVE.includes(st) && a.lifeEst;
+  const blocked = MC.isBlocked(st), nowTxt = blocked ? (st === 'blocked' && a.actTool ? a.actTool + ' · ' : '') + a.act : actText(a, st);
+  const stLabel = { running: 'RUNNING TOOL', thinking: 'THINKING', delegating: 'DELEGATING', idle: 'IDLE', done: 'FINISHED',
+                    blocked: '⏸ NEEDS YOUR APPROVAL', asking: '❓ ASKING YOU' }[st];
+  const qs = st === 'asking' ? ((snap.waiting || []).find(w => w.aid === a.id && w.kind === 'question') || {}).questions || [] : [];
+  const where = (snap.cwd || '').split(/[\\/]/).slice(-2).join('/');
   const hist = Object.entries(a.hist).sort((x, y) => y[1] - x[1]).map(([k, v]) => `<span>${esc(k)} <b>${v}</b></span>`).join('');
   const rec = a.recent.slice().reverse().map(r => `<span class="tn">${esc(r.n)}</span><span class="${r.err ? 'te' : ''}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.s)}</span><span>${fmtD(r.ms)}</span>`).join('');
   box.style.setProperty('--c', col);
@@ -241,8 +304,12 @@ function renderDetail(snap) {
     `<div class="d-head"><span class="sd ${st}" style="--c:${col}"></span><span class="nm">${esc(names.get(a.id))}</span><span class="mc ${mclass(a.model)}">${esc(shortModel(a.model))}</span>`
     + (a.effort ? `<span class="badge">effort ${esc(a.effort)}</span>` : '') + (a.bg ? '<span class="badge">background</span>' : '') + `</div>`
     + `<div class="d-sub">${esc(a.id === 'main' ? 'orchestrator (main agent)' : a.type + (a.desc ? ' — ' + a.desc : ''))}${parent ? ' · spawned by <b>' + esc(names.get(parent.id)) + '</b>' : ''}</div>`
-    + `<div class="now"><div class="lbl">${stLabel}${st === 'running' || st === 'delegating' ? ' · <span data-t="since">' + fmtD(now - a.actSince) + '</span>' : ''}</div><div class="big">${esc(nowTxt)}</div></div>`
-    + `<div class="grid"><div class="kv"><div class="k">ELAPSED</div><div class="v" data-t="el">${fmtD(elapsed)}</div></div>`
+    + `<div class="now${blocked ? ' wait' : ''}"><div class="lbl">${stLabel}${st === 'running' || st === 'delegating' || blocked ? ' · <span data-t="since">' + fmtD(now - a.actSince) + '</span>' : ''}</div>`
+    + (qs.length ? `<div class="qs">${qs.map(q => `<div><div class="qq">${esc(q.q)}${q.multi ? ' <span class="badge">pick several</span>' : ''}</div><ol>${q.options.map(o => `<li>${esc(o.label)}${o.description ? ' <span>— ' + esc(o.description) + '</span>' : ''}</li>`).join('')}</ol></div>`).join('')}</div>`
+                 : `<div class="big">${esc(nowTxt)}</div>`)
+    + (busy ? '<div class="dp"><div class="pb" data-t="pa"><i></i></div><div class="pt"></div></div>' : '')
+    + (blocked ? `<div class="hint2">Answer it in the terminal${where ? ' for 📁 ' + esc(where) : ''}.</div>` : '') + `</div>`
+    + `${life ? `<div class="dp life"><div class="lbl">THIS AGENT · a ${esc(a.type)} usually takes ~${fmtD(a.lifeEst)}</div><div class="pb" data-t="pl"><i></i></div><div class="pt"></div></div>` : ''}<div class="grid"><div class="kv"><div class="k">ELAPSED</div><div class="v" data-t="el">${fmtD(elapsed)}</div></div>`
     + `<div class="kv"><div class="k">TOOL TIME</div><div class="v">${fmtD(a.toolMs)}</div></div>`
     + `<div class="kv"><div class="k">THINK TIME</div><div class="v">${a.thinkMs ? fmtD(a.thinkMs) : '—'}</div></div>`
     + `<div class="kv"><div class="k">CONTEXT NOW</div><div class="v">${fmtK(t.ctx)}</div></div>`
@@ -252,14 +319,49 @@ function renderDetail(snap) {
     + `<div class="bar"><i style="width:${t.in / tot * 100}%;background:#4da3ff"></i><i style="width:${t.cw / tot * 100}%;background:#ffb02e"></i><i style="width:${t.cr / tot * 100}%;background:#2effa8"></i><i style="width:${t.out / tot * 100}%;background:#ff3df2"></i></div>`
     + `<div class="legend2"><span><i class="sw" style="background:#4da3ff"></i>input <b>${fmtK(t.in)}</b></span><span><i class="sw" style="background:#ffb02e"></i>cache write <b>${fmtK(t.cw)}</b></span><span><i class="sw" style="background:#2effa8"></i>cache read <b>${fmtK(t.cr)}</b></span><span><i class="sw" style="background:#ff3df2"></i>output <b>${fmtK(t.out)}</b>${t.think ? ' (thinking ' + fmtK(t.think) + ')' : ''}</span></div>`
     + (kids.length ? `<div class="sec"><span>SUB-AGENTS (${kids.length})</span></div><div class="kids">${kids.map(k => `<button data-k="${esc(k.id)}" style="border-color:${colorOf(snap.id, k.id)};color:${colorOf(snap.id, k.id)}">${esc(names.get(k.id))} · ${esc(effStatus(k, snap))}</button>`).join('')}</div>` : '')
+    + ((a.shells || []).length ? `<div class="sec"><span>BACKGROUND SHELLS (${a.shells.length})</span></div><div class="tl">${a.shells.map(x => `<span class="tn">Bash</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.s)}</span><span>${fmtD(now - x.ts)}</span>`).join('')}</div>` : '')
     + `<div class="sec"><span>${a.id === 'main' ? 'LAST MESSAGE' : 'LAST MESSAGE / RESULT'}</span><span>${a.textTs ? new Date(a.textTs).toLocaleTimeString([], { hour12: false }) : ''}</span></div>`
     + `<div class="msgbox last">${a.text ? esc(a.text) : '<span style="color:var(--dim)">no message yet</span>'}</div>`
     + (a.task ? `<div class="sec"><span>TASK GIVEN</span></div><div class="msgbox task">${esc(a.task)}</div>` : '')
     + (hist ? `<div class="sec"><span>TOOLS USED</span></div><div class="hist">${hist}</div>` : '')
     + (rec ? `<div class="sec"><span>RECENT TOOL CALLS</span></div><div class="tl">${rec}</div>` : '');
-  box.querySelectorAll('[data-k]').forEach(b => b.onclick = () => selectAgent(b.dataset.k));
+  box.querySelectorAll('[data-k]').forEach(b => b.onclick = () => selectAgent(b.dataset.k)); tick();
   box.scrollTop = keepTop; const mb = box.querySelector('.msgbox.last'); if (mb) mb.scrollTop = keepScroll;
   $('dsel').textContent = names.get(a.id);
+}
+
+// the YOU panel: whose move it is, what to answer, and what the run did
+function renderYou(snap, box) {
+  const full = snap._full || snap, names = nameMap(snap), now = nowOf(snap), turn = MC.yourTurn(snap), m = full.agents.find(a => a.id === 'main');
+  const subs = full.agents.filter(a => a.id !== 'main'), busy = subs.filter(a => MC.ACTIVE.includes(effStatus(a, full))), waits = full.waiting || [];
+  const evs = MC.S.events.get(snap.id) || [], prompts = evs.filter(e => e.kind === 'prompt'), lastP = prompts[prompts.length - 1];
+  const since = turn || (m && m.last) || now, tick = () => { const el = box.querySelector('[data-t=since]'); if (el) el.textContent = fmtD(nowOf(snap) - since); };
+  const sig = JSON.stringify([snap.id, 'user', turn, m && m.textTs, busy.map(a => a.id), waits.map(w => w.key), prompts.length, subs.length, full.cost && full.cost.usd, full.live]);
+  if (sig === V.detailSig) return tick();
+  V.detailSig = sig;
+  const where = (full.cwd || '').split(/[\\/]/).slice(-2).join('/'), tools = full.agents.reduce((n, a) => n + a.tools, 0);
+  const btn = (id, extra) => `<button data-k="${esc(id)}" style="border-color:${colorOf(snap.id, id)};color:${colorOf(snap.id, id)}">${esc(names.get(id))}${extra ? ' · ' + esc(extra) : ''}</button>`;
+  const [cls, lbl, big] = turn ? ['now turn', '▶ YOUR TURN', `Claude finished${subs.length ? ` and all ${subs.length} agent${subs.length > 1 ? 's are' : ' is'} done` : ''}. Type your next prompt in the terminal${where ? ' for 📁 ' + where : ''}.`]
+    : waits.length ? ['now wait', '⏸ AGENTS NEED YOU', `${waits.length} waiting on you in the terminal${where ? ' for 📁 ' + where : ''}:`]
+    : !full.live ? ['now', 'SESSION ENDED', 'Nothing is running.']
+    : ['now', 'CLAUDE IS WORKING', busy.length ? `${busy.length} agent${busy.length > 1 ? 's' : ''} still busy:` : 'Claude is on it. Nothing needs you yet.'];
+  const list = waits.length ? waits.map(w => btn(w.aid, MC.waitLabel(w))).join('') : !turn && busy.length ? busy.map(a => btn(a.id, effStatus(a, full))).join('') : '';
+  box.style.setProperty('--c', '#e8f1ff');
+  box.innerHTML = `<div class="d-head"><span class="sd ${turn ? 'idle' : waits.length ? 'blocked' : 'running'}" style="--c:#e8f1ff"></span><span class="nm">YOU</span>${turn ? '<span class="badge">your turn</span>' : ''}</div>`
+    + `<div class="d-sub">${esc(full.title || 'Untitled session')}${where ? ' · 📁 ' + esc(where) : ''}</div>`
+    + `<div class="${cls}"><div class="lbl">${lbl}${full.live ? ' · <span data-t="since">' + fmtD(now - since) + '</span>' : ''}</div><div class="big">${esc(big)}</div>`
+    + (list ? `<div class="kids" style="margin-top:6px">${list}</div>` : '') + '</div>'
+    + `<div class="grid"><div class="kv"><div class="k">SESSION</div><div class="v">${fmtD(now - full.first)}</div></div>`
+    + `<div class="kv"><div class="k">PROMPTS</div><div class="v">${prompts.length}</div></div>`
+    + `<div class="kv"><div class="k">AGENTS</div><div class="v">${subs.length}</div></div>`
+    + `<div class="kv"><div class="k">TOOL CALLS</div><div class="v">${tools}</div></div>`
+    + `<div class="kv"><div class="k">COST</div><div class="v">${full.cost && full.cost.usd != null ? '$' + full.cost.usd.toFixed(2) : '—'}</div></div>`
+    + `<div class="kv"><div class="k">MODEL</div><div class="v">${esc(shortModel(m && m.model) || '—')}</div></div></div>`
+    + `<div class="sec"><span>CLAUDE'S LAST MESSAGE</span><span>${m && m.textTs ? new Date(m.textTs).toLocaleTimeString([], { hour12: false }) : ''}</span></div>`
+    + `<div class="msgbox last">${m && m.text ? esc(m.text) : '<span style="color:var(--dim)">no message yet</span>'}</div>`
+    + (lastP ? `<div class="sec"><span>YOUR LAST PROMPT</span><span>${new Date(lastP.ts).toLocaleTimeString([], { hour12: false })}</span></div><div class="msgbox task">${esc(lastP.text)}</div>` : '');
+  box.querySelectorAll('[data-k]').forEach(b => b.onclick = () => selectAgent(b.dataset.k));
+  $('dsel').textContent = 'you';
 }
 
 /* ---------- message stream ---------- */
@@ -399,8 +501,9 @@ function drawTimeline() {
 }
 
 /* ---------- render orchestration ---------- */
+const UP = MC.usagePanel($('usage')); MC.initFolds();
 function renderAll() {
-  const snap = cur(); $('hint').hidden = !!snap; $('strip').innerHTML = MC.stripHTML(snap);
+  const snap = cur(); UP.draw(snap); $('hint').hidden = !!snap; $('strip').innerHTML = MC.stripHTML(snap);
   if (!snap) { renderDetail(null); return; }
   if (V.feedSid !== snap.id) { sessionReset(); rebuildFeed(); }
   const sig = snap.id + '|' + snap.agents.map(a => a.id + '>' + a.parent).join(',') + '|' + $('stage').clientWidth;
@@ -417,6 +520,7 @@ MC.start({
   id: 'mission',
   onSession() { sessionReset(); feed.innerHTML = ''; renderAll(); },
   onSnap() { renderAll(); },
+  onFocusAgent(id) { selectAgent(id); const c = V.cards.get(id); if (c) c.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' }); },
   onTick() { renderAll(); },
   onReset() { sessionReset(); feed.innerHTML = ''; renderAll(); },
   onTheme() { V.sig = ''; renderAll(); rebuildFeed(); },
