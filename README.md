@@ -120,3 +120,20 @@ Every row with a transcript has **⏵ replay**. Type in the box to filter by tit
 **⏵ replay** (in the session list) re-runs a transcript step by step (pause/resume, 1x-64x, restart). Time stats follow the
 session's own clock, not wall-clock. Clicking a past session opens its final state instantly - the same result a replay
 reaches at its end; if that session is still running, it simply keeps updating live.
+
+## Online preview (GitHub Pages)
+
+The same dashboard also runs as a static page, with no install: `.github/workflows/pages.yml` publishes it on every push to `main`.
+Click **📂 Open sessions folder** and pick `~/.claude/projects`, or just one project folder inside it. On Windows that is
+`%USERPROFILE%\.claude\projects`; paste the path into the dialog's address bar because `.claude` is hidden. The browser reads
+the files itself. Nothing is uploaded, even though Chrome's prompt says "upload". Then open or replay any session from the session list.
+**▶ Demo** works too. There is no live mode online, because that needs the hooks and `node run-me.js`.
+
+`server.js` runs unchanged in the page (`static.js` stands in for the Node file and HTTP calls). Build and test locally:
+
+```
+node agent-viz/build-static.js      # writes _site/
+node agent-viz/static.test.js
+```
+
+One-time setup: make the repo public, then **Settings → Pages → Source: GitHub Actions**.

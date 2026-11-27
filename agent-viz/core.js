@@ -233,6 +233,7 @@
       pop.hidden = true; refresh(true);
     };
   }
+  MC.reloadPast = () => { P.at = 0; loadPast(); };    // static.js: a folder was just picked
   async function loadPast() {
     if (Date.now() - P.at < 4000) return; P.at = Date.now();
     try { P.past = await (await fetch('/api/sessions?n=80')).json(); } catch {}
@@ -277,10 +278,12 @@
     let list = []; try { list = await (await fetch('/api/views')).json(); } catch {}
     const sel = $('mc-view'); sel.innerHTML = list.map(v => `<option value="${esc(v.id)}" title="${esc(v.description)}">View: ${esc(v.name)}</option>`).join('');
     sel.value = MC.view.id;
-    sel.onchange = e => { lsSet('mc-view', e.target.value); location.href = '/v/' + e.target.value; };
+    const href = id => window.MC_STATIC ? id + '.html' : '/v/' + id;     // static.js (GitHub Pages): one <id>.html per view
+    const atRoot = window.MC_STATIC ? /\/(index\.html)?$/.test(location.pathname) : location.pathname === '/';
+    sel.onchange = e => { lsSet('mc-view', e.target.value); location.href = href(e.target.value); };
     // on the bare "/" URL, open the view the user picked last time
     const saved = lsGet('mc-view');
-    if (location.pathname === '/' && saved && saved !== MC.view.id && list.some(v => v.id === saved)) location.replace('/v/' + saved);
+    if (atRoot && saved && saved !== MC.view.id && list.some(v => v.id === saved)) location.replace(href(saved));
   }
   function updateReplayUI(c) {
     const box = $('mc-rp'), r = c && c.replay; box.hidden = !r; if (!r) return;
