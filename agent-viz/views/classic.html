@@ -50,8 +50,8 @@ aside h2{margin:0;padding:10px 14px;font-size:11px;letter-spacing:.2em;color:var
     <div class="hint" id="hint"><big>AWAITING SIGNAL</big>Run Claude Code with the hooks installed,<br>press ▶ Demo, or replay a past session.</div>
   </div>
   <aside>
-    <h2><span>MESSAGE STREAM</span><span id="filter" hidden></span></h2>
-    <div id="feed"></div>
+    <section class="fold" data-fold="feed"><h2><span>MESSAGE STREAM</span><span id="filter" hidden></span></h2><div id="feed"></div></section>
+    <section class="fold" data-fold="usage"><h2><span>TOOLS · SKILLS · MCP</span></h2><div class="us" id="usage"></div></section>
   </aside>
   <div class="timeline" id="tw"><canvas id="tl"></canvas><div class="legend" style="pointer-events:auto">TIMELINE ·
     <select id="win" style="padding:0 4px;font-size:10.5px"><option value="60000" selected>last 60s</option><option value="300000">last 5 min</option><option value="1800000">last 30 min</option><option value="0">whole session</option></select></div></div>
@@ -62,6 +62,7 @@ const $ = id => document.getElementById(id);
 const { esc, alpha, nameMap, colorOf, effStatus, nowOf, isFresh, fmtD } = MC;
 const V = { nodes: new Map(), particles: [], rings: [], heat: new Map(), filter: null, feedSid: null, counts: { hand: 0, tools: 0 } };
 const gw = $('gw'), gc = $('graph'), g = gc.getContext('2d'), tw = $('tw'), tc = $('tl'), t2 = tc.getContext('2d'), feed = $('feed');
+const UP = MC.usagePanel($('usage')); MC.initFolds();
 const cur = () => MC.cur(), FF = () => getComputedStyle(document.body).fontFamily;
 
 /* ---------- nodes (circles) ---------- */
@@ -80,8 +81,11 @@ function syncNodes(snap) {
   for (const id of ids) if (!V.nodes.has(id)) V.nodes.set(id, { id, x: 0, y: 0, tx: 0, ty: 0, init: false, flash: 0, tool: '', toolT: 0, active: false, count: 0 });
   for (const n of V.nodes.values()) {
     const a = snap.agents.find(x => x.id === n.id); n.name = names.get(n.id) || n.id; n.color = colorOf(snap.id, n.id);
-    n.active = !!a && n.id !== 'user' && ['running', 'thinking', 'delegating'].includes(effStatus(a, snap)); n.count = a ? a.tools : 0;
+    const st = a ? effStatus(a, snap) : '';
+    n.active = !!a && n.id !== 'user' && MC.ACTIVE.includes(st); n.count = a ? a.tools : 0; n.a = a; n.st = st;
+    n.wait = MC.isBlocked(st) ? (st === 'blocked' ? '⏸ NEEDS APPROVAL' + (a.actTool ? ': ' + a.actTool : '') : '❓ ASKING YOU') : '';
   }
+  const you = V.nodes.get('user'); if (you) you.turn = MC.yourTurn(snap);
   layout(snap);
   const sum = k => snap.agents.reduce((s, a) => s + a[k], 0);
   $('mc-extra').innerHTML = `<span class="stats"><span>AGENTS <b>${snap.agents.length - (V.nodes.has('main') ? 1 : 0)}</b></span><span>HANDOFFS <b>${V.counts.hand}</b></span><span>TOOL CALLS <b>${sum('tools')}</b></span><span>ACTIVE <b>${[...V.nodes.values()].filter(n => n.active && n.id !== 'main').length}</b></span></span>`;
@@ -145,17 +149,58 @@ function drawGraph(now) {
   V.rings = V.rings.filter(r => { r.r += 1.6; if (r.r > 46) return false; g.beginPath(); g.arc(r.n.x, r.n.y, 20 + r.r, 0, 7); g.strokeStyle = alpha(r.c, 1 - r.r / 46); g.lineWidth = 2; g.stroke(); return true; });
   for (const n of V.nodes.values()) {
     const R = n.id === 'main' ? 27 : n.id === 'user' ? 17 : 22, on = n.active, dim = V.filter && V.filter !== n.id ? .35 : 1; g.globalAlpha = dim;
-    if (on) { g.beginPath(); g.arc(n.x, n.y, R + 9, now / 400, now / 400 + 4.2); g.strokeStyle = alpha(n.color, .9); g.lineWidth = 2; g.shadowColor = n.color; g.shadowBlur = 16; g.stroke(); g.shadowBlur = 0; }
+    const busy = n.a && (n.st === 'running' || n.st === 'delegating'), pr = busy ? MC.progress(n.a, snap) : null;
+    if (pr && pr.frac != null) drawRing(n, R, pr, now);
+    else if (on) { g.beginPath(); g.arc(n.x, n.y, R + 9, now / 400, now / 400 + 4.2); g.strokeStyle = alpha(n.color, .9); g.lineWidth = 2; g.shadowColor = n.color; g.shadowBlur = 16; g.stroke(); g.shadowBlur = 0; }
     g.beginPath(); g.arc(n.x, n.y, R, 0, 7); const grd = g.createRadialGradient(n.x, n.y, 2, n.x, n.y, R);
     grd.addColorStop(0, alpha(n.color, .35 + n.flash * .5)); grd.addColorStop(1, alpha(n.color, .08 + n.flash * .25));
     g.fillStyle = grd; g.shadowColor = n.color; g.shadowBlur = 10 + n.flash * 28 + (on ? 8 : 0); g.fill(); g.lineWidth = 2; g.strokeStyle = n.color; g.stroke(); g.shadowBlur = 0;
     g.fillStyle = n.color; g.textAlign = 'center'; g.font = '600 11px ' + ff; g.fillText(n.id === 'user' ? 'YOU' : n.name.toUpperCase().slice(0, 14), n.x, n.y + R + 17);
     g.font = '700 11px ' + ff; g.fillText(n.id === 'user' ? '▲' : n.count, n.x, n.y + 4);
+    const wait = n.wait || (n.turn ? '▶ YOUR TURN · ' + fmtD(now - n.turn) : '');
+    if (wait) {                                     // blocked on you (amber) or your turn (green): pulsing ring + label, over the usual spinner
+      const W8 = n.wait ? '#ffb02e' : MC.TURN, pulse = (Math.sin(now / 260) + 1) / 2;
+      g.beginPath(); g.arc(n.x, n.y, R + 7 + pulse * 6, 0, 7); g.strokeStyle = alpha(W8, .5 + pulse * .5); g.lineWidth = 3; g.shadowColor = W8; g.shadowBlur = 18; g.stroke(); g.shadowBlur = 0;
+      g.font = '700 10.5px ' + ff; const tw2 = g.measureText(wait).width + 12;
+      g.fillStyle = W8; g.beginPath(); g.roundRect(n.x - tw2 / 2, n.y - R - 34, tw2, 17, 4); g.fill();
+      g.fillStyle = '#05070d'; g.textAlign = 'center'; g.fillText(wait, n.x, n.y - R - 22);
+    }
+    if (n.a && n.id !== 'user' && !n.wait && (busy || n.st === 'thinking')) drawAction(n, R, pr, ff, now);
     const age = now - n.toolT;
     if (n.tool && age < 2600) { g.globalAlpha = dim * (1 - age / 2600); g.font = '10px ' + ff; g.fillStyle = '#cfe3ff'; g.fillText('⚙ ' + n.tool, n.x, n.y - R - 12 - age / 220); }
     g.globalAlpha = 1;
   }
   g.textAlign = 'left';
+}
+
+// progress ring: a faint track plus an arc that fills towards the usual duration of this command (striped and moving once it runs long)
+function drawRing(n, R, p, now) {
+  const r = R + 7, a0 = -Math.PI / 2;
+  g.beginPath(); g.arc(n.x, n.y, r, 0, 7); g.strokeStyle = alpha(n.color, .16); g.lineWidth = 3.5; g.stroke();
+  g.beginPath(); g.arc(n.x, n.y, r, a0, a0 + p.frac * Math.PI * 2); g.strokeStyle = n.color; g.lineWidth = 3.5; g.lineCap = 'round';
+  if (p.over) { g.setLineDash([6, 5]); g.lineDashOffset = -now / 40; }
+  g.shadowColor = n.color; g.shadowBlur = 14; g.stroke(); g.shadowBlur = 0; g.setLineDash([]); g.lineCap = 'butt';
+  const e = a0 + p.frac * Math.PI * 2;   // a bright dot on the leading edge
+  g.beginPath(); g.arc(n.x + Math.cos(e) * r, n.y + Math.sin(e) * r, 3.2, 0, 7); g.fillStyle = '#fff'; g.fill();
+}
+// the current action, kept under the node for as long as it runs: what it is, how long it has run, and the usual time
+function fitText(t, w) { if (g.measureText(t).width <= w) return t; while (t.length > 1 && g.measureText(t + '…').width > w) t = t.slice(0, -1); return t + '…'; }
+function drawAction(n, R, p, ff, now) {
+  const a = n.a, st = n.st, icon = st === 'thinking' ? '◌' : st === 'delegating' ? '⇢' : (MC.TOOLICON[a.actTool] || '⚙');
+  const txt = st === 'thinking' ? 'thinking…' : st === 'running' ? a.actTool + ' · ' + a.act.replace(/^\S+ · /, '') : a.act;
+  g.font = '10.5px ' + ff; const l1 = fitText(icon + ' ' + txt, 200), l2 = p ? MC.estText(p) : '';
+  g.font = '10px ' + ff; const w = Math.max(g.measureText(l2).width, (g.font = '10.5px ' + ff, g.measureText(l1).width)) + 16, h = l2 ? 34 : 19;
+  const x = n.x - w / 2, y = n.y + R + 24;
+  g.fillStyle = 'rgba(4,6,12,.88)'; g.strokeStyle = alpha(n.color, st === 'thinking' ? .3 : .7); g.lineWidth = 1;
+  g.beginPath(); g.roundRect(x, y, w, h, 5); g.fill(); g.stroke();
+  g.textAlign = 'center'; g.fillStyle = st === 'thinking' ? 'rgba(207,227,255,.6)' : '#e6f1ff'; g.fillText(l1, n.x, y + 13);
+  if (!l2) return;
+  g.font = '10px ' + ff; g.fillStyle = p.over ? '#ffb02e' : alpha(n.color, .95); g.fillText(l2, n.x, y + 25);
+  const bx = x + 5, bw = w - 10, by = y + h - 4;     // mini bar inside the label
+  g.fillStyle = alpha(n.color, .15); g.fillRect(bx, by, bw, 2);
+  g.fillStyle = n.color;
+  if (p.frac != null) g.fillRect(bx, by, bw * p.frac, 2);
+  else { const t = (now % 1600) / 1600, sw = bw * .3, s0 = Math.max(bx, bx + (bw + sw) * t - sw), s1 = Math.min(bx + bw, bx + (bw + sw) * t); g.fillRect(s0, by, s1 - s0, 2); }   // no history: a sliding segment
 }
 
 /* ---------- timeline (swimlanes, last 60s) ---------- */
@@ -188,7 +233,7 @@ function drawTimeline() {
 /* ---------- wiring ---------- */
 function resetLocal() { V.nodes.clear(); V.particles = []; V.rings = []; V.heat.clear(); V.counts = { hand: 0, tools: 0 }; V.filter = null; $('filter').hidden = true; V.feedSid = null; }
 function render() {
-  const snap = cur(); $('hint').hidden = !!(snap && snap.agents.length);
+  const snap = cur(); $('hint').hidden = !!(snap && snap.agents.length); UP.draw(snap);
   if (!snap) { resetLocal(); feed.innerHTML = ''; $('mc-extra').innerHTML = ''; return; }
   if (V.feedSid !== snap.id) { resetLocal(); V.counts.hand = (MC.S.events.get(snap.id) || []).filter(e => e.kind === 'handoff' || e.kind === 'result').length; rebuildFeed(); }
   syncNodes(snap);
@@ -197,6 +242,7 @@ MC.start({
   id: 'classic',
   onSession() { resetLocal(); render(); },
   onSnap() { render(); },
+  onFocusAgent(id) { setFilter(id); },
   onTick() { render(); },
   onReset() { resetLocal(); feed.innerHTML = ''; render(); },
   onTheme() { render(); rebuildFeed(); },

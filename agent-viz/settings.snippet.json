@@ -4,6 +4,8 @@
     "PreToolUse":       [{ "matcher": "*", "hooks": [{ "type": "command", "command": "node C:/path/to/agent-viz/hook.js" }] }],
     "PostToolUse":      [{ "matcher": "Task|Agent", "hooks": [{ "type": "command", "command": "node C:/path/to/agent-viz/hook.js" }] }],
     "SubagentStop":     [{ "hooks": [{ "type": "command", "command": "node C:/path/to/agent-viz/hook.js" }] }],
-    "Stop":             [{ "hooks": [{ "type": "command", "command": "node C:/path/to/agent-viz/hook.js" }] }]
+    "Stop":             [{ "hooks": [{ "type": "command", "command": "node C:/path/to/agent-viz/hook.js" }] }],
+    "Notification":     [{ "hooks": [{ "type": "command", "command": "node C:/path/to/agent-viz/hook.js" }] }],
+    "SessionEnd":       [{ "hooks": [{ "type": "command", "command": "node C:/path/to/agent-viz/hook.js" }] }]
   }
 }
