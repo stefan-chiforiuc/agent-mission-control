@@ -29,6 +29,7 @@ const EVENTS = {
   SubagentStop: null,
   Stop: null,
   Notification: null,   // fires when a permission dialog opens in the terminal -> "blocked" badge (never waits, never answers)
+  SessionEnd: null,     // you closed Claude Code -> the session stops showing as live at once
 };
 
 const args = process.argv.slice(2);

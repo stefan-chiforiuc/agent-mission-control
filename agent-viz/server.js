@@ -223,6 +223,7 @@ class Session {
   // a dialog can stay open a long time with no activity at all, so pending waits keep a session "live" (up to 2h)
   scope() { return this.demo ? 'demo' : this.tp ? path.basename(path.dirname(this.tp)) : '*'; }   // where typical durations are looked up
   isLive() {
+    if (this.closed) return false;            // SessionEnd hook: Claude Code exited (it still writes to the transcript while closing)
     const now = Date.now();
     return now - Math.max(this.lastHook, this.lastGrowth) < 10 * 60 * 1000 || [...this.waits.values()].some(w => now - w.since < 2 * 3600 * 1000);
   }
@@ -382,6 +383,9 @@ function onHook(h) {
   if (h.cwd && !s.cwd) s.cwd = h.cwd;
   if (h.permission_mode) s.permissionMode = h.permission_mode;
   s.lastHook = Date.now(); s.dirty = true;
+  // closed until it shows real activity again (resumed); shutdown noise like a late SubagentStop doesn't reopen it
+  if (h.hook_event_name === 'SessionEnd') { s.closed = true; s.unwait(() => true); }
+  else if (h.hook_event_name === 'UserPromptSubmit' || h.hook_event_name === 'PreToolUse') s.closed = false;
   raw.push({ ts: Date.now(), ...h }); if (raw.length > 40) raw.shift();
   trackWaits(s, h);
   setImmediate(() => scan(s)); setTimeout(() => scan(s), 350); setTimeout(() => scan(s), 1200);

@@ -72,6 +72,9 @@ shows the tool ran or was denied, the agent moves on, or you type a new prompt.
 This needs the `Notification` hook. Re-run `node run-me.js install <project>` for projects installed before it existed,
 then restart Claude Code there.
 
+A session stops showing as live the moment you close Claude Code (`SessionEnd` hook, installed the same way).
+Without that hook it falls back to "quiet for 10 minutes".
+
 ## Progress of running work
 
 Claude Code doesn't report how far a command has got, so the dashboard **estimates** it from your history: it reads the
